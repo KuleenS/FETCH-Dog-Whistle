@@ -33,8 +33,8 @@ def main(args):
     
     dogwhistle_glossary_df = pd.read_csv(args.dogwhistle_file_path, sep="\t")
 
-    dogwhistle_set = dogwhistle_glossary_df["Surface Forms"].str.split(";").tolist()
-
+    dogwhistle_set = [item for sublist in dogwhistle_glossary_df["Surface Forms"].str.split(";").tolist() for item in sublist]
+    
     dogwhistle_set = list(set([x.lower().strip() for x in dogwhistle_set]))
 
     dogwhistle_set = [bytes(x) for x in dogwhistle_set]
@@ -65,7 +65,7 @@ def main(args):
 
                 for tweet in tweets:
 
-                    stream.scan(tweet, context = Context(patterns, tweet, tweet_file, results))
+                    stream.scan(tweet.lower(), context = Context(patterns, tweet, tweet_file, results))
             
                     if len(results) > 500:
                         csvwriter.writerows(results)
@@ -80,4 +80,4 @@ if __name__ == '__main__':
     parser.add_argument('--id')
     args = parser.parse_args()
 
-    main(args.name)
+    main(args)
