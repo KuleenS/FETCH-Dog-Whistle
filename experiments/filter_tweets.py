@@ -2,13 +2,21 @@ import argparse
 
 import csv
 
+import gzip
+
+import json
+
 import os
+
+import re
 
 from typing import Tuple, List
 
+import hyperscan
+
 import pandas as pd
 
-import hyperscan
+from tqdm import tqdm
 
 class Context:
     def __init__(self, id_lookup: Tuple[str, int, int], tweet: str, twitter_file: str, results: List[Tuple[str, str, str]]) -> None:
@@ -16,10 +24,6 @@ class Context:
         self.tweet = tweet
         self.twitter_file = twitter_file
         self.results = results
-
-def process_twitter_file(twitter_file_path: str) -> List[str]:
-    pass
-
 
 def on_match(id: int, start: int, end: int, flags: int, context: Context) -> None:
 
@@ -34,10 +38,10 @@ def main(args):
     dogwhistle_glossary_df = pd.read_csv(args.dogwhistle_file_path, sep="\t")
 
     dogwhistle_set = [item for sublist in dogwhistle_glossary_df["Surface Forms"].str.split(";").tolist() for item in sublist]
-    
+
     dogwhistle_set = list(set([x.lower().strip() for x in dogwhistle_set]))
 
-    dogwhistle_set = [bytes(x) for x in dogwhistle_set]
+    dogwhistle_set = [x.replace("(", "\(").replace(")", "\)").encode("utf-8") for x in dogwhistle_set]
 
     db = hyperscan.Database(mode=hyperscan.HS_MODE_STREAM)
 
@@ -57,19 +61,28 @@ def main(args):
 
         csvwriter.writerow(["tweet_file", "match", "tweet"]) 
 
-        for i, tweet_file in enumerate(input_files):
+        for i, tweet_file in tqdm(enumerate(input_files), desc="Twitter Files"):
 
-            tweets = process_twitter_file(tweet_file)
+            tweets = gzip.open(tweet_file, "rt")
 
             with db.stream(match_event_handler=on_match) as stream:
 
-                for tweet in tweets:
+                for tweet in tqdm(tweets, desc=f"Processing {tweet_file}"):
 
-                    stream.scan(tweet.lower(), context = Context(patterns, tweet, tweet_file, results))
-            
-                    if len(results) > 500:
-                        csvwriter.writerows(results)
-                        results = []
+                    if isinstance(tweet, str):
+                        tweet = json.loads(tweet)
+
+                    if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
+                        
+                        tweet_text = tweet["text"].lower()
+                        
+                        tweet_text = re.sub(r"https:(\/\/t\.co\/([A-Za-z0-9]|[A-Za-z]){10})", "", tweet_text)
+
+                        stream.scan(tweet_text.encode("utf-8"), context = Context(patterns, tweet["text"], tweet_file, results))
+                
+                        if len(results) > 500:
+                            csvwriter.writerows(results)
+                            results = []
 
 
 if __name__ == '__main__':
