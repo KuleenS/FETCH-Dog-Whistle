@@ -10,6 +10,8 @@ import evaluate
 
 import pandas as pd
 
+from tqdm import tqdm
+
 def main(args):
     input_files = args.filtered_tweet_files
     
@@ -33,7 +35,7 @@ def main(args):
     for i in range(len(dogwhistle_set)):
         surface_forms = dogwhistle_set[i]
         for j in range(len(surface_forms)):
-            surface_form_comparison_pairs[surface_forms[j].lower().strip()] = comparison_set[i]
+            surface_form_comparison_pairs[surface_forms[j].lower().strip().replace("(", "\(").replace(")", "\)").encode("utf-8")] = comparison_set[i]
     
     with open(os.path.join(args.output_folder, f"comparison_scores_{comparing}_{args.id}.csv"), "w") as f:
         csvwriter = csv.writer(f)
@@ -47,29 +49,16 @@ def main(args):
                 datareader = csv.reader(csvfile)
                 next(datareader)
 
-                tweets = []
-                tweet_files = []
-                comparisons = []
+                for row in tqdm(datareader):
 
-                for row in datareader:
+                    tweet_file, match, tweet = row
 
-                    tweet_file, match, tweet = row.rstrip().split(",")
+                    results = rouge.compute(predictions=[tweet],
+                    references=[surface_form_comparison_pairs[match.encode("utf-8")]])
 
-                    tweets.append(tweet)
-                    tweet_files.append(tweet_file)
-                    comparisons.append(surface_form_comparison_pairs[match])
+                    output = [tweet_file, tweet, match, results['rouge1'], results['rouge2'], results['rougeL'], results['rougeLsum']]
 
-                    if len(tweets) > 500:
-                        results = rouge.compute(predictions=tweets,
-                        references=comparisons, use_aggregator=False)
-
-                        output = zip(tweet_files, tweets, comparisons, results['rouge1'], results['rouge2'], results['rougeL'], results['rougeLsum'])
-
-                        csvwriter.writerows(output)
-
-                        tweets = []
-                        tweet_files = []
-                        comparisons = []
+                    csvwriter.writerow(output)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

@@ -41,7 +41,7 @@ def main(args):
 
     dogwhistle_set = list(set([x.lower().strip() for x in dogwhistle_set]))
 
-    dogwhistle_set = [x.replace("(", "\(").replace(")", "\)").encode("utf-8") for x in dogwhistle_set]
+    dogwhistle_set = [re.escape(x).encode("utf-8") for x in dogwhistle_set]
 
     db = hyperscan.Database(mode=hyperscan.HS_MODE_STREAM)
 
@@ -65,24 +65,30 @@ def main(args):
 
             tweets = gzip.open(tweet_file, "rt")
 
-            with db.stream(match_event_handler=on_match) as stream:
+            try:
 
-                for tweet in tqdm(tweets, desc=f"Processing {tweet_file}"):
+                with db.stream(match_event_handler=on_match) as stream:
 
-                    if isinstance(tweet, str):
-                        tweet = json.loads(tweet)
+                    for tweet in tqdm(tweets, desc=f"Processing {tweet_file}"):
 
-                    if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
-                        
-                        tweet_text = tweet["text"].lower()
-                        
-                        tweet_text = re.sub(r"https:(\/\/t\.co\/([A-Za-z0-9]|[A-Za-z]){10})", "", tweet_text)
+                        if isinstance(tweet, str):
+                            tweet = json.loads(tweet)
 
-                        stream.scan(tweet_text.encode("utf-8"), context = Context(patterns, tweet["text"], tweet_file, results))
-                
-                        if len(results) > 500:
-                            csvwriter.writerows(results)
-                            results = []
+                        if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
+                            
+                            tweet_text = tweet["text"].lower()
+                            
+                            tweet_text = re.sub(r"https:(\/\/t\.co\/([A-Za-z0-9]|[A-Za-z]){10})", "", tweet_text)
+
+                            stream.scan(tweet_text.encode("utf-8"), context = Context(patterns, tweet["text"], tweet_file, results))
+                    
+                            if len(results) > 500:
+                                csvwriter.writerows(results)
+                                results = []
+            except EOFError:
+                print(f"{tweet_file} was not downloaded properly")
+            
+            csvwriter.writerows(results)
 
 
 if __name__ == '__main__':
