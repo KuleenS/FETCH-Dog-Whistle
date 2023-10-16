@@ -82,9 +82,18 @@ def main(args):
 
                             stream.scan(tweet_text.encode("utf-8"), context = Context(patterns, tweet["text"], tweet_file, results))
                     
-                            if len(results) > 500:
-                                csvwriter.writerows(results)
-                                results = []
+                        # dealing with gab data
+                        elif "body" in tweet:
+                            tweet_text = tweet["body"].lower()
+                            
+                            tweet_text = re.sub(r"http\S+", "", tweet_text)
+
+                            stream.scan(tweet_text.encode("utf-8"), context = Context(patterns, tweet["body"], tweet_file, results))
+                    
+                        if len(results) > 500:
+                            csvwriter.writerows(results)
+                            results = []
+
             except EOFError:
                 print(f"{tweet_file} was not downloaded properly")
             
