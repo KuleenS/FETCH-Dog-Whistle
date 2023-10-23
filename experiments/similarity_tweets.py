@@ -4,6 +4,8 @@ import csv
 
 import os
 
+import re
+
 from typing import List
 
 import evaluate
@@ -35,7 +37,7 @@ def main(args):
     for i in range(len(dogwhistle_set)):
         surface_forms = dogwhistle_set[i]
         for j in range(len(surface_forms)):
-            surface_form_comparison_pairs[surface_forms[j].lower().strip().replace("(", "\(").replace(")", "\)").encode("utf-8")] = comparison_set[i]
+            surface_form_comparison_pairs[re.escape(surface_forms[j].lower().strip()).encode("utf-8")] = comparison_set[i]
     
     with open(os.path.join(args.output_folder, f"comparison_scores_{comparing}_{args.id}.csv"), "w") as f:
         csvwriter = csv.writer(f)
