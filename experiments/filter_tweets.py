@@ -71,28 +71,32 @@ def main(args):
 
                     for tweet in tqdm(tweets, desc=f"Processing {tweet_file}"):
 
-                        if isinstance(tweet, str):
-                            tweet = json.loads(tweet)
+                        tweet = tweet.strip()
 
-                        if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
-                            
-                            tweet_text = tweet["text"].lower()
-                            
-                            tweet_text = re.sub(r"https:(\/\/t\.co\/([A-Za-z0-9]|[A-Za-z]){10})", "", tweet_text)
+                        if len(tweet) != 0:
 
-                            stream.scan(tweet_text.encode("utf-8"), context = Context(patterns, tweet["text"], tweet_file, results))
-                    
-                        # dealing with gab data
-                        elif "body" in tweet:
-                            tweet_text = tweet["body"].lower()
-                            
-                            tweet_text = re.sub(r"http\S+", "", tweet_text)
+                            if isinstance(tweet, str):
+                                tweet = json.loads(tweet)
 
-                            stream.scan(tweet_text.encode("utf-8"), context = Context(patterns, tweet["body"], tweet_file, results))
-                    
-                        if len(results) > 500:
-                            csvwriter.writerows(results)
-                            results = []
+                            if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
+                                
+                                tweet_text = tweet["text"].lower()
+                                
+                                tweet_text = re.sub(r"https:(\/\/t\.co\/([A-Za-z0-9]|[A-Za-z]){10})", "", tweet_text)
+
+                                stream.scan(tweet_text.encode("utf-8"), context = Context(patterns, tweet["text"], tweet_file, results))
+                        
+                            # dealing with gab data
+                            elif "body" in tweet:
+                                tweet_text = tweet["body"].lower()
+                                
+                                tweet_text = re.sub(r"http\S+", "", tweet_text)
+
+                                stream.scan(tweet_text.encode("utf-8"), context = Context(patterns, tweet["body"], tweet_file, results))
+                        
+                            if len(results) > 500:
+                                csvwriter.writerows(results)
+                                results = []
 
             except EOFError:
                 print(f"{tweet_file} was not downloaded properly")
