@@ -76,7 +76,11 @@ def main(args):
                         if len(tweet) != 0:
 
                             if isinstance(tweet, str):
-                                tweet = json.loads(tweet)
+                                try: 
+                                    tweet = json.loads(tweet)
+                                except json.decoder.JSONDecodeError:
+                                    print("Decode failure")
+                                    tweet = ""
 
                             if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
                                 
