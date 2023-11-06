@@ -39,7 +39,10 @@ def main(args):
     for dogwhistle in comparison_set:
         d[dogwhistle] = 0
     
+    print(f"Running on {input_files}")
+
     for input_file in input_files:
+        print(f"Processing {input_file}")
         with open(input_file, "r") as csvfile:
             datareader = csv.reader(csvfile)
             next(datareader)
