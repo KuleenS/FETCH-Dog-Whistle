@@ -1,39 +1,89 @@
 from argparse import Namespace
 
-import pickle
+from collections import defaultdict
+
+import gzip
+
+import json
+
+import random
 
 from typing import Dict, List
 
-from src.euphemism_detection.Euphemism.detection import euphemism_detection, evaluate_detection
-from src.euphemism_detection.Euphemism.identification import euphemism_identification
+import nltk
+
+import torch
+
+from tqdm import tqdm
+
+from Euphemism.detection import MLM
 
 class NeuralEuphemismDetector: 
 
-    def __init__(self, given_keywords: Dict[str, List[str]], target_keywords: List[str], data: str, c1: int = 2, c2: int = 0, coarse: bool = 1):
+    def __init__(self, given_keywords: List[str], data: List[str]):
         self.given_keywords = given_keywords
-        self.target_keywords = target_keywords
         self.data = data
-        self.c1 = c1
-        self.c2 = c2
-        self.coarse = coarse
+        
+    
+    def euphemism_detection(self, input_keywords, files, ms_limit, filter_uninformative):
+        print('\n' + '*' * 40 + ' [Euphemism Detection] ' + '*' * 40)
+        print('[util.py] Input Keyword: ', end='')
+        print(input_keywords)
+        print('[util.py] Extracting masked sentences for input keywords...')
+        masked_sentence = []
+
+        files = [files[0]]
+
+        for i, tweet_file in tqdm(enumerate(files), desc="Twitter Files"):
+
+            tweets = gzip.open(tweet_file, "rt")
+
+            try:
+
+                for tweet in tqdm(tweets, desc=f"Processing {tweet_file}"):
+
+                    tweet = tweet.strip()
+
+                    if len(tweet) != 0:
+                        if isinstance(tweet, str):
+                            try: 
+                                tweet = json.loads(tweet)
+                            except json.decoder.JSONDecodeError:
+                                print("Decode failure")
+                                continue
+                            
+                        tweet_text = ""
+
+                        if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
+                            
+                            tweet_text = tweet["text"].lower()
+                            
+                        elif "body" in tweet:
+                            try:
+                                tweet_text = tweet["body"].lower()
+                            except:
+                                print(tweet, " failed")
+                                tweet_text = ""
+                            
+                    temp = nltk.word_tokenize(tweet_text)
+                    for input_keyword_i in input_keywords:
+                        if input_keyword_i not in temp:
+                            continue
+                        temp_index = temp.index(input_keyword_i)
+                        masked_sentence += [' '.join(temp[: temp_index]) + ' <mask> ' + ' '.join(temp[temp_index + 1:])]
+            
+            except EOFError:
+                print(f"{tweet_file} was not downloaded properly")
+        
+        random.shuffle(masked_sentence)
+        masked_sentence = masked_sentence[:ms_limit]
+        print('[util.py] Generating top candidates...')
+        top_words, _, _ = MLM(masked_sentence, input_keywords, thres=5, filter_uninformative=filter_uninformative)
+        return top_words
     
     def run(self):
-        input_keywords = sorted(list(set([y for x in self.given_keywords.values() for y in x])))
-        
-        target_name = {}
-        count = 0
+        input_keywords = [x.lower().strip() for x in self.given_keywords]
 
-        for keyword in self.target_keywords:
-            target_name[keyword.strip()] = count
-            count += 1
+        top_words = self.euphemism_detection(input_keywords, self.data, ms_limit=2000, filter_uninformative=1)
 
-        with open(self.data, "r") as f:
-            all_text = f.readlines()
-        
-        args = Namespace(c1 = self.c1, c2=self.c2, coarse = self.coarse)
-
-        input_keywords = [x.lower().strip() for x in input_keywords]
-
-        top_words = euphemism_detection(input_keywords, all_text, ms_limit=2000, filter_uninformative=1)
-
-        euphemism_identification(top_words, all_text, self.given_keywords, input_keywords, target_name, args)
+        print(top_words)
