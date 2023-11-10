@@ -12,6 +12,8 @@ import re
 
 from typing import Tuple, List
 
+import zlib
+
 import hyperscan
 
 import pandas as pd
@@ -63,7 +65,12 @@ def main(args):
 
         for i, tweet_file in tqdm(enumerate(input_files), desc="Twitter Files"):
 
-            tweets = gzip.open(tweet_file, "rt")
+            try:
+
+                tweets = gzip.open(tweet_file, "rt")
+            
+            except (zlib.error, gzip.BadGzipFile):
+                tweets = []
 
             try:
 
@@ -80,7 +87,7 @@ def main(args):
                                     tweet = json.loads(tweet)
                                 except json.decoder.JSONDecodeError:
                                     print("Decode failure")
-                                    tweet = ""
+                                    continue
 
                             if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
                                 
