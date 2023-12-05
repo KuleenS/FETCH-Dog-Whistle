@@ -20,11 +20,11 @@ def main(args):
     dogwhistles = defaultdict(list)
 
     for i in range(len(dogwhistle_set)):
-        dogwhistles[comparison_set[i]] = dogwhistle_set[i]
+        dogwhistles[comparison_set[i]] = [x.strip() for x in dogwhistle_set[i]]
 
     data = pickle.load(open(args.recall_file, "rb"))
 
-    dogwhistles_seen = set([x for x in data if data[x] != 0])
+    dogwhistles_seen = list(set([x for x in data if data[x] != 0]))
 
     extrapolating_dogwhistles, given_dogwhistles = train_test_split(dogwhistles_seen, test_size=0.2)
 
