@@ -1,7 +1,3 @@
-from argparse import Namespace
-
-from collections import defaultdict
-
 import gzip
 
 import json
@@ -12,13 +8,11 @@ from typing import Dict, List
 
 import nltk
 
-import torch
-
 from tqdm import tqdm
 
 from Euphemism.detection import MLM
 
-class NeuralEuphemismDetector: 
+class SingleNeuralEuphemismDetector: 
 
     def __init__(self, given_keywords: List[str], data: List[str]):
         self.given_keywords = given_keywords
