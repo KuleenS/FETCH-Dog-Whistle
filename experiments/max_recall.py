@@ -48,7 +48,7 @@ def main(args):
             next(datareader)
 
             for row in tqdm(datareader):
-                tweet_file, match, tweet = row
+                tweet_file, match, tweet, date = row
 
                 dogwhistle_match = surface_form_comparison_pairs[match.encode("utf-8")]
 
@@ -57,6 +57,7 @@ def main(args):
     with open(os.path.join(output_folder, "recall.pickle"), "wb") as f:
         pickle.dump(d, f)
 
+    print((len(d) - len([x for x in d if d[x]==0]))/len(d))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
