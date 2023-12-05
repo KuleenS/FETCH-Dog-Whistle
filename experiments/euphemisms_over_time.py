@@ -77,7 +77,11 @@ def main(args):
 
                 with db.stream(match_event_handler=on_match) as stream:
 
-                    for tweet in tqdm(tweets, desc=f"Processing {tweet_file}"):
+                    while True:
+                        try:
+                            tweet = next(tweets)
+                        except (IOError, StopIteration, zlib.error):
+                            break
 
                         tweet = tweet.strip()
 
