@@ -12,6 +12,20 @@ import pandas as pd
 
 from sklearn.model_selection import train_test_split
 
+import argparse
+
+from collections import defaultdict, Counter
+
+import os
+
+from nltk.tokenize import word_tokenize
+
+import pickle
+
+import pandas as pd
+
+from sklearn.model_selection import train_test_split
+
 
 class DogwhistleSplitter:
 
@@ -22,7 +36,7 @@ class DogwhistleSplitter:
 
         comparison_set = df["Dogwhistle"].tolist()
 
-        self.ngrams = [len(word_tokenize(x)) for x in comparison_set]
+        self.ngrams = {x : len(word_tokenize(x)) for x in comparison_set}
 
         self.dogwhistles = defaultdict(list)
 
@@ -38,7 +52,23 @@ class DogwhistleSplitter:
     def split(self):
         ngrams = [self.ngrams[x] for x in self.seen_dogwhistles]
 
-        extrapolating_dogwhistles, given_dogwhistles = train_test_split(self.seen_dogwhistles, test_size=0.2, stratify = ngrams)
+        counted = Counter(ngrams)
+
+        not_stratifable_ngrams = []
+
+        for x in counted:
+            if counted[x] < 2:
+                not_stratifable_ngrams.append(x)
+
+        stratifiable_seen_dogwhistles = [x for ngram, x in zip(ngrams, self.seen_dogwhistles) if ngram not in not_stratifable_ngrams]
+
+        not_stratifiable_seen_dogwhistles = [x for ngram, x in zip(ngrams, self.seen_dogwhistles) if ngram in not_stratifable_ngrams]
+
+        ngrams = [self.ngrams[x] for x in stratifiable_seen_dogwhistles]
+
+        extrapolating_dogwhistles, given_dogwhistles = train_test_split(stratifiable_seen_dogwhistles, test_size=0.2, stratify = ngrams)
+
+        given_dogwhistles = given_dogwhistles + not_stratifiable_seen_dogwhistles
 
         given_dogwhistles_surface_forms = []
         extrapolating_dogwhistles_surface_forms = []
