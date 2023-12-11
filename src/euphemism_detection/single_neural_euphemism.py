@@ -14,9 +14,10 @@ from Euphemism.detection import MLM
 
 class SingleNeuralEuphemismDetector: 
 
-    def __init__(self, given_keywords: List[str], data: List[str]):
+    def __init__(self, given_keywords: List[str], data: List[str], data_is_tweets: bool = False):
         self.given_keywords = given_keywords
         self.data = data
+        self.data_is_tweets = data_is_tweets
         
     
     def euphemism_detection(self, input_keywords, files, ms_limit, filter_uninformative):
@@ -31,60 +32,66 @@ class SingleNeuralEuphemismDetector:
 
         MASK = ' [MASK] '
 
-        for i, tweet_file in tqdm(enumerate(files), desc="Twitter Files"):
+        if not self.data_is_tweets:
 
-            tweets = gzip.open(tweet_file, "rt")
+            for i, tweet_file in tqdm(enumerate(files), desc="Twitter Files"):
 
-            try:
+                tweets = gzip.open(tweet_file, "rt")
 
-                for tweet in tqdm(tweets, desc=f"Processing {tweet_file}"):
+                try:
 
-                    tweet = tweet.strip()
+                    for tweet in tqdm(tweets, desc=f"Processing {tweet_file}"):
 
-                    if len(tweet) != 0:
-                        if isinstance(tweet, str):
-                            try: 
-                                tweet = json.loads(tweet)
-                            except json.decoder.JSONDecodeError:
-                                print("Decode failure")
-                                continue
-                            
-                        tweet_text = ""
+                        tweet = tweet.strip()
 
-                        if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
-                            
-                            tweet_text = tweet["text"].lower()
-                            
-                        elif "body" in tweet:
-                            try:
-                                tweet_text = tweet["body"].lower()
-                            except:
-                                print(tweet, " failed")
-                                tweet_text = ""
-                    
-                    if isinstance(tweet_text, str) and tweet_text is not None:
-                            
-                        temp = nltk.word_tokenize(tweet_text)
-                        for target in input_keywords:
-                            temp = nltk.word_tokenize(i)
-                            if target not in temp:
-                                continue
-                            temp_index = temp.index(target)
+                        if len(tweet) != 0:
+                            if isinstance(tweet, str):
+                                try: 
+                                    tweet = json.loads(tweet)
+                                except json.decoder.JSONDecodeError:
+                                    print("Decode failure")
+                                    continue
+                                
+                            tweet_text = ""
 
-                            N += 1
+                            if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
+                                
+                                tweet_text = tweet["text"].lower()
+                                
+                            elif "body" in tweet:
+                                try:
+                                    tweet_text = tweet["body"].lower()
+                                except:
+                                    print(tweet, " failed")
+                                    tweet_text = ""
+                        
+                        if isinstance(tweet_text, str) and tweet_text is not None:
+                            print(tweet_text)
+                            print(type(tweet_text))
+                            temp = nltk.word_tokenize(tweet_text)
+                            for target in input_keywords:
+                                if target not in temp:
+                                    continue
+                                temp_index = temp.index(target)
 
-                            if len(masked_sentence) < K:
-                                masked_sentence += [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
-                            else:
-                                s = int(random.random() * N)
-                                if s < K:
-                                    masked_sentence[s] = [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
+                                N += 1
+
+                                if len(masked_sentence) < K:
+                                    masked_sentence += [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
+                                else:
+                                    s = int(random.random() * N)
+                                    if s < K:
+                                        masked_sentence[s] = [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
+                
+                except EOFError:
+                    print(f"{tweet_file} was not downloaded properly")
             
-            except EOFError:
-                print(f"{tweet_file} was not downloaded properly")
+            print('[util.py] Generating top candidates...')
+        else:
+            masked_sentence = self.data
         
-        print('[util.py] Generating top candidates...')
         top_words, _, _ = MLM(masked_sentence, input_keywords, thres=5, filter_uninformative=filter_uninformative)
+
         return top_words
     
     def run(self):

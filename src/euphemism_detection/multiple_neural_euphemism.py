@@ -197,7 +197,6 @@ class MultiNeuralEuphemismDetector:
                             
                     temp = nltk.word_tokenize(tweet_text)
                     for target in given_keywords:
-                        temp = nltk.word_tokenize(i)
                         if target not in temp:
                             continue
                         temp_index = temp.index(target)

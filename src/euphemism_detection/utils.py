@@ -52,23 +52,9 @@ class DogwhistleSplitter:
     def split(self):
         ngrams = [self.ngrams[x] for x in self.seen_dogwhistles]
 
-        counted = Counter(ngrams)
+        ngrams = [x if (x < 4) else 4 for x in ngrams]
 
-        not_stratifable_ngrams = []
-
-        for x in counted:
-            if counted[x] < 2:
-                not_stratifable_ngrams.append(x)
-
-        stratifiable_seen_dogwhistles = [x for ngram, x in zip(ngrams, self.seen_dogwhistles) if ngram not in not_stratifable_ngrams]
-
-        not_stratifiable_seen_dogwhistles = [x for ngram, x in zip(ngrams, self.seen_dogwhistles) if ngram in not_stratifable_ngrams]
-
-        ngrams = [self.ngrams[x] for x in stratifiable_seen_dogwhistles]
-
-        extrapolating_dogwhistles, given_dogwhistles = train_test_split(stratifiable_seen_dogwhistles, test_size=0.2, stratify = ngrams)
-
-        given_dogwhistles = given_dogwhistles + not_stratifiable_seen_dogwhistles
+        extrapolating_dogwhistles, given_dogwhistles = train_test_split(self.seen_dogwhistles, test_size=0.2, stratify = ngrams)
 
         given_dogwhistles_surface_forms = []
         extrapolating_dogwhistles_surface_forms = []
