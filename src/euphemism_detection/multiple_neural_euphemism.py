@@ -1,5 +1,7 @@
 from collections import defaultdict
 
+import glob
+
 import gzip
 
 import json
@@ -16,12 +18,14 @@ from typing import Dict, List
 
 from fitbert import FitBert
 
-from gensim.models.word2vec import LineSentence
-from gensim.models import KeyedVectors, Word2Vec
-
 import nltk
 
 import numpy as np
+
+import joblib
+
+from gensim.models import Phrases
+from gensim.models.word2vec import Word2Vec as W2V
 
 import torch
 
@@ -33,11 +37,12 @@ from EPD.detection import MLM
 
 class MultiNeuralEuphemismDetector: 
 
-    def __init__(self, given_keywords: List[str], data: List[str], phrase_candidates: List[str], dataset_name: str, output_dir: str, bert_model: str):
+    def __init__(self, given_keywords: List[str], data: List[str], phrase_candidates: List[str], word_2_vec: str, dataset_name: str, output_dir: str, bert_model: str):
         self.given_keywords = given_keywords
         self.data = data
         self.phrase_candidates = phrase_candidates
         self.output_dir = output_dir
+        self.word_2_vec = word_2_vec
         self.bert_model = bert_model
         self.dataset_name = dataset_name
 
@@ -57,20 +62,35 @@ class MultiNeuralEuphemismDetector:
             out.append(phrase_i.lower())
         return out
 
-    def train_word2vec_embed(self, sentences, new_text_file, embed_fn, ft=10, vec_dim=50, window=8):
-        with open(new_text_file, 'w') as fout:
-            for i in sentences:
-                fout.write(i + '\n')
-        sentences = LineSentence(new_text_file)
-        sent_cnt = 0
-        for sentence in sentences:
-            sent_cnt += 1
-        print("# of sents: {}".format(sent_cnt))
-        start = time.time()
-        model = Word2Vec(sentences, min_count=ft, size=vec_dim, window=window, iter=10, workers=30)
-        print("embed train time: {}s".format(time.time() - start))
-        model.wv.save_word2vec_format(embed_fn, binary=False)
-        return model
+    # def train_word2vec_embed(self, sentences, new_text_file, embed_fn, ft=10, vec_dim=50, window=8):
+    #     with open(new_text_file, 'w') as fout:
+    #         for i in sentences:
+    #             fout.write(i + '\n')
+    #     sentences = LineSentence(new_text_file)
+    #     sent_cnt = 0
+    #     for sentence in sentences:
+    #         sent_cnt += 1
+    #     print("# of sents: {}".format(sent_cnt))
+    #     start = time.time()
+    #     model = Word2Vec(sentences, min_count=ft, size=vec_dim, window=window, iter=10, workers=30)
+    #     print("embed train time: {}s".format(time.time() - start))
+    #     model.wv.save_word2vec_format(embed_fn, binary=False)
+    #     return model
+    
+    def loadw2v(self, directory):
+        ## Check Existence
+        if not os.path.exists(directory):
+            raise ValueError(f"Model not found at path: {directory}")
+        ## Load Class
+        w2v = joblib.load(f"{directory}word2vec.class")
+        ## Load Model
+        phraser_files = sorted(glob(f"{directory}/phraser.*"), key=lambda x: int(x.split("/")[-1].split(".")[-1]))
+        w2v.phrasers = [Phrases.load(pf) for pf in phraser_files]
+        if os.path.exists(f"{directory}word2vec.model"):
+            w2v.model = W2V.load(f"{directory}word2vec.model")
+        else:
+            w2v.model = None
+        return w2v
 
     def rank_by_word2vec(self, given_keywords, phrase_cand):
         new_text = []
@@ -82,11 +102,10 @@ class MultiNeuralEuphemismDetector:
         if not os.path.isdir(self.output_dir):
             os.mkdir(self.output_dir) 
 
-        embed_file = os.path.join(self.output_dir, "embeddings_" + self.dataset_name+".txt")
-        new_text_file = os.path.join(self.output_dir, "new_" + self.dataset_name+".txt")
+        word2vec_model = self.loadw2v(self.word_2_vec)
 
-        word2vec_model = self.train_word2vec_embed(new_text, new_text_file, embed_file)
-        emb_dict = KeyedVectors.load_word2vec_format(embed_file, binary=False, limit=20000)
+        emb_dict = word2vec_model.keyedvectors
+
         target_vector = []
         seq = []
         for i, seed in enumerate(given_keywords):
@@ -138,20 +157,64 @@ class MultiNeuralEuphemismDetector:
         
         return phrase_cand, []
 
-    def euphemism_detection(self, given_keywords: List[str], all_text: List[str], skip: bool, multi: bool):
+    def euphemism_detection(self, given_keywords: List[str], files: List[str], skip: bool, multi: bool):
         MASK = ' [MASK] '
         masked_sentence = []
-        for target in given_keywords:
-            for i in tqdm(all_text):
-                temp = nltk.word_tokenize(i)
-                if target not in temp:
-                    continue
-                temp_index = temp.index(target)
-                masked_sentence += [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
-        
-        random.shuffle(masked_sentence)
-        masked_sentence = masked_sentence[:2000]
 
+        N = 0
+        K = 2000
+       
+        for i, tweet_file in tqdm(enumerate(files), desc="Twitter Files"):
+
+            tweets = gzip.open(tweet_file, "rt")
+
+            try:
+
+                for tweet in tqdm(tweets, desc=f"Processing {tweet_file}"):
+
+                    tweet = tweet.strip()
+
+                    if len(tweet) != 0:
+                        if isinstance(tweet, str):
+                            try: 
+                                tweet = json.loads(tweet)
+                            except json.decoder.JSONDecodeError:
+                                print("Decode failure")
+                                continue
+                            
+                        tweet_text = ""
+
+                        if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
+                            
+                            tweet_text = tweet["text"].lower()
+                            
+                        elif "body" in tweet:
+                            try:
+                                tweet_text = tweet["body"].lower()
+                            except:
+                                print(tweet, " failed")
+                                tweet_text = ""
+                            
+                    temp = nltk.word_tokenize(tweet_text)
+                    for target in given_keywords:
+                        temp = nltk.word_tokenize(i)
+                        if target not in temp:
+                            continue
+                        temp_index = temp.index(target)
+
+                        N += 1
+
+                        if len(masked_sentence) < K:
+                            masked_sentence += [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
+                        else:
+                            s = int(random.random() * N)
+                            if s < K:
+                                masked_sentence[s] = [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
+
+            except EOFError:
+                print(f"{tweet_file} was not downloaded properly")
+
+        
         if multi:
             top_words, top_words_tuple, _ = MLM(masked_sentence, given_keywords, thres=5, skip_flag=skip)
         else:
@@ -163,6 +226,6 @@ class MultiNeuralEuphemismDetector:
     def run(self):
         input_keywords = [x.lower().strip() for x in self.given_keywords]
 
-        top_words = self.euphemism_detection(input_keywords, self.data, ms_limit=2000, filter_uninformative=1)
+        top_words = self.euphemism_detection(input_keywords, self.data, skip = True, multi = True)
 
-        print(top_words)
+        return top_words
