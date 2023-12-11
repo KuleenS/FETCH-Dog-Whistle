@@ -26,7 +26,10 @@ class SingleNeuralEuphemismDetector:
         print('[util.py] Extracting masked sentences for input keywords...')
         masked_sentence = []
 
-        files = [files[0]]
+        N = 0
+        K = ms_limit
+
+        MASK = ' [MASK] '
 
         for i, tweet_file in tqdm(enumerate(files), desc="Twitter Files"):
 
@@ -58,19 +61,28 @@ class SingleNeuralEuphemismDetector:
                             except:
                                 print(tweet, " failed")
                                 tweet_text = ""
+                    
+                    if isinstance(tweet_text, str) and tweet_text is not None:
                             
-                    temp = nltk.word_tokenize(tweet_text)
-                    for input_keyword_i in input_keywords:
-                        if input_keyword_i not in temp:
-                            continue
-                        temp_index = temp.index(input_keyword_i)
-                        masked_sentence += [' '.join(temp[: temp_index]) + ' <mask> ' + ' '.join(temp[temp_index + 1:])]
+                        temp = nltk.word_tokenize(tweet_text)
+                        for target in input_keywords:
+                            temp = nltk.word_tokenize(i)
+                            if target not in temp:
+                                continue
+                            temp_index = temp.index(target)
+
+                            N += 1
+
+                            if len(masked_sentence) < K:
+                                masked_sentence += [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
+                            else:
+                                s = int(random.random() * N)
+                                if s < K:
+                                    masked_sentence[s] = [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
             
             except EOFError:
                 print(f"{tweet_file} was not downloaded properly")
         
-        random.shuffle(masked_sentence)
-        masked_sentence = masked_sentence[:ms_limit]
         print('[util.py] Generating top candidates...')
         top_words, _, _ = MLM(masked_sentence, input_keywords, thres=5, filter_uninformative=filter_uninformative)
         return top_words
@@ -80,4 +92,4 @@ class SingleNeuralEuphemismDetector:
 
         top_words = self.euphemism_detection(input_keywords, self.data, ms_limit=2000, filter_uninformative=1)
 
-        print(top_words)
+        return top_words
