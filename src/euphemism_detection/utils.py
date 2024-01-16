@@ -1,26 +1,8 @@
-import argparse
-
 from collections import defaultdict
 
-import os
-
-from nltk.tokenize import word_tokenize
-
 import pickle
 
-import pandas as pd
-
-from sklearn.model_selection import train_test_split
-
-import argparse
-
-from collections import defaultdict, Counter
-
-import os
-
 from nltk.tokenize import word_tokenize
-
-import pickle
 
 import pandas as pd
 
@@ -36,12 +18,12 @@ class DogwhistleSplitter:
 
         comparison_set = df["Dogwhistle"].tolist()
 
-        self.ngrams = {x : len(word_tokenize(x)) for x in comparison_set}
-
         self.dogwhistles = defaultdict(list)
 
         for i in range(len(dogwhistle_set)):
             self.dogwhistles[comparison_set[i]] = [x.strip() for x in dogwhistle_set[i]]
+
+        self.ngrams = {x : min([len(word_tokenize(y)) for y in self.dogwhistles[x]]) for x in comparison_set}
         
         self.dogwhistle_to_ngrams = dict(zip(comparison_set, self.ngrams))
 
