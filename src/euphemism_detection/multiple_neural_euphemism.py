@@ -8,8 +8,6 @@ import json
 
 import os
 
-import time
-
 import random
 
 import string
@@ -29,24 +27,39 @@ from gensim.models.word2vec import Word2Vec as W2V
 
 import torch
 
-from transformers import BertForMaskedLM, BertTokenizer
+from transformers import AutoTokenizer, AutoModelForMaskedLM
 
 from tqdm import tqdm
 
-from EPD.detection import MLM
+from nltk.corpus import stopwords
+
+nltk.download('stopwords')
 
 class MultiNeuralEuphemismDetector: 
 
-    def __init__(self, given_keywords: List[str], data: List[str], phrase_candidates: List[str], word_2_vec: str, dataset_name: str, output_dir: str, bert_model: str):
+    def __init__(self, given_keywords: List[str], data: List[str], phrase_candidates: List[str], word_2_vec: str, dataset_name: str, output_dir: str, model_name: str, thres: int, data_is_tweets: bool = False):
         self.given_keywords = given_keywords
         self.data = data
         self.phrase_candidates = phrase_candidates
         self.output_dir = output_dir
         self.word_2_vec = word_2_vec
-        self.bert_model = bert_model
         self.dataset_name = dataset_name
+        self.data_is_tweets = data_is_tweets
+        self.thres = thres
+
+        self.model_name = model_name
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # bert_tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+        self.bert_tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+
+        # bert_model = BertForMaskedLM.from_pretrained("bert-base-uncased").to(device)
+        self.bert_model = AutoModelForMaskedLM.from_pretrained(self.model_name).to(self.device)
+
+        self.PAD = self.bert_tokenizer.pad_token
+        self.MASK = self.bert_tokenizer.mask_token
+        self.CLS = self.bert_tokenizer.cls_token
+        self.SEP = self.bert_tokenizer.sep_token
     
     def filter_phrase(self, phrase_cand, top_words):
         out = []
@@ -61,6 +74,74 @@ class MultiNeuralEuphemismDetector:
                 continue
             out.append(phrase_i.lower())
         return out
+    
+    def single_MLM(self, message, threshold):
+
+        max_length = self.bert_model.config.max_position_embeddings - 2
+
+        tokens = self.bert_tokenizer(message, truncation=True, max_length=max_length, return_tensors="pt")
+
+        tokenized = self.bert_tokenizer.tokenize(message, truncation=True)[:max_length]
+
+        tokens.to(self.device)
+
+        with torch.no_grad():
+            output = self.bert_model(**tokens)
+        
+        logits = output.logits
+
+        logits = logits.squeeze(0)
+        probs = torch.softmax(logits, dim=-1)
+
+        out = []
+
+        for idx, token in enumerate(tokenized):
+            if token.strip() == self.MASK:
+                topk_prob, topk_indices = torch.topk(probs[idx, :], threshold)
+                topk_tokens = self.bert_tokenizer.convert_ids_to_tokens(topk_indices.cpu().numpy())
+                out = [[topk_tokens[i], float(topk_prob[i])] for i in range(threshold)]
+
+        return out
+
+
+    def MLM(self, sgs, input_keywords, thres=1, filter_uninformative=1):
+        MLM_score = defaultdict(float)
+
+        sgs = [x.replace("[MASK]", self.MASK) for x in sgs]
+
+        temp = sgs if len(sgs) < 10 else tqdm(sgs)
+        skip_ms_num = 0
+        good_sgs = []
+
+        for sgs_i in temp:
+            top_words = self.single_MLM(sgs_i, thres)
+            seen_input = 0
+            for input_i in input_keywords:
+                if input_i in [x[0] for x in top_words[:thres]]:
+                    seen_input += 1
+            if filter_uninformative == 1 and seen_input < 2:
+                skip_ms_num += 1
+                continue
+            good_sgs.append(sgs_i)
+            for j in top_words:
+                if j[0] in string.punctuation:
+                    continue
+                if j[0] in stopwords.words('english'):
+                    continue
+                if j[0] in input_keywords:
+                    continue
+                if j[0] in ['drug', 'drugs']:  # exclude these two for the drug dataset.
+                    continue
+                if j[0][:2] == '##':  # the '##' by BERT indicates that is not a word.
+                    continue
+                MLM_score[j[0]] += j[1]
+            # print(sgs_i)
+            # print([x[0] for x in top_words[:20]])
+        out = sorted(MLM_score, key=lambda x: MLM_score[x], reverse=True)
+        out_tuple = [[x, MLM_score[x]] for x in out]
+        if len(sgs) >= 10:
+            print('The percentage of uninformative masked sentences is {:d}/{:d} = {:.2f}%'.format(skip_ms_num, len(sgs), float(skip_ms_num)/len(sgs)*100))
+        return out, out_tuple, good_sgs
 
     # def train_word2vec_embed(self, sentences, new_text_file, embed_fn, ft=10, vec_dim=50, window=8):
     #     with open(new_text_file, 'w') as fout:
@@ -117,10 +198,8 @@ class MultiNeuralEuphemismDetector:
         out = [' '.join(x[0].split('_')) for x in word2vec_model.wv.similar_by_vector(target_vector_ave, topn=len(emb_dict.vocab)) if '_' in x[0] and not any(y in given_keywords for y in x[0].split('_'))]
         return out, []
     
-    def rank_by_spanbert(self, phrase_cand, sgs, drug_formal):
-        bert_tokenizer = BertTokenizer.from_pretrained(self.bert_model)
-        bert_model = BertForMaskedLM.from_pretrained(self.bert_model).to(self.device)
-        fb = FitBert(model=bert_model, tokenizer=bert_tokenizer, mask_token='[MASK]')
+    def rank_by_spanbert(self, phrase_cand, sgs, drug_formal, thres):
+        fb = FitBert(model=self.bert_model, tokenizer=self.bert_tokenizer, mask_token=self.MASK)
         MLM_score = defaultdict(float)
         temp = sgs if len(sgs) < 10 else tqdm(sgs)
         for sgs_i in temp:
@@ -129,7 +208,7 @@ class MultiNeuralEuphemismDetector:
             temp = fb.rank_multi(sgs_i, phrase_cand)
             scores = [x / max(temp[1]) for x in temp[1]]
             scores = fb.softmax(torch.tensor(scores).unsqueeze(0)).tolist()[0]
-            top_words = [[temp[0][i], scores[i]] for i in range(min(len(temp[0]), 50))]
+            top_words = [[temp[0][i], scores[i]] for i in range(min(len(temp[0]), thres))]
             for j in top_words:
                 if j[0] in string.punctuation:
                     continue
@@ -148,12 +227,12 @@ class MultiNeuralEuphemismDetector:
         out_tuple = [[x, MLM_score[x]] for x in out]
         return out, out_tuple
 
-    def multi_MLM(self, sentence: str, given_keywords: List[str], top_words: List[str]):
+    def multi_MLM(self, sentences: List[str], given_keywords: List[str], top_words: List[str], thres: int):
         phrase_cand = self.filter_phrase(self.phrase_candidates, top_words)
 
         phrase_cand, _ = self.rank_by_word2vec(phrase_cand, given_keywords)
 
-        phrase_cand, _ = self.rank_by_spanbert(phrase_cand, sentence, given_keywords)
+        phrase_cand, _ = self.rank_by_spanbert(phrase_cand, sentences, given_keywords, thres)
         
         return phrase_cand, []
 
@@ -163,62 +242,66 @@ class MultiNeuralEuphemismDetector:
 
         N = 0
         K = 2000
+
+        if not self.data_is_tweets:
        
-        for i, tweet_file in tqdm(enumerate(files), desc="Twitter Files"):
+            for i, tweet_file in tqdm(enumerate(files), desc="Twitter Files"):
 
-            tweets = gzip.open(tweet_file, "rt")
+                tweets = gzip.open(tweet_file, "rt")
 
-            try:
+                try:
 
-                for tweet in tqdm(tweets, desc=f"Processing {tweet_file}"):
+                    for tweet in tqdm(tweets, desc=f"Processing {tweet_file}"):
 
-                    tweet = tweet.strip()
+                        tweet = tweet.strip()
 
-                    if len(tweet) != 0:
-                        if isinstance(tweet, str):
-                            try: 
-                                tweet = json.loads(tweet)
-                            except json.decoder.JSONDecodeError:
-                                print("Decode failure")
+                        if len(tweet) != 0:
+                            if isinstance(tweet, str):
+                                try: 
+                                    tweet = json.loads(tweet)
+                                except json.decoder.JSONDecodeError:
+                                    print("Decode failure")
+                                    continue
+                                
+                            tweet_text = ""
+
+                            if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
+                                
+                                tweet_text = tweet["text"].lower()
+                                
+                            elif "body" in tweet:
+                                try:
+                                    tweet_text = tweet["body"].lower()
+                                except:
+                                    print(tweet, " failed")
+                                    tweet_text = ""
+                                
+                        temp = nltk.word_tokenize(tweet_text)
+                        for target in given_keywords:
+                            if target not in temp:
                                 continue
-                            
-                        tweet_text = ""
+                            temp_index = temp.index(target)
 
-                        if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
-                            
-                            tweet_text = tweet["text"].lower()
-                            
-                        elif "body" in tweet:
-                            try:
-                                tweet_text = tweet["body"].lower()
-                            except:
-                                print(tweet, " failed")
-                                tweet_text = ""
-                            
-                    temp = nltk.word_tokenize(tweet_text)
-                    for target in given_keywords:
-                        if target not in temp:
-                            continue
-                        temp_index = temp.index(target)
+                            N += 1
 
-                        N += 1
+                            if len(masked_sentence) < K:
+                                masked_sentence += [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
+                            else:
+                                s = int(random.random() * N)
+                                if s < K:
+                                    masked_sentence[s] = [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
 
-                        if len(masked_sentence) < K:
-                            masked_sentence += [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
-                        else:
-                            s = int(random.random() * N)
-                            if s < K:
-                                masked_sentence[s] = [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
-
-            except EOFError:
-                print(f"{tweet_file} was not downloaded properly")
-
-        
-        if multi:
-            top_words, top_words_tuple, _ = MLM(masked_sentence, given_keywords, thres=5, skip_flag=skip)
+                except EOFError:
+                    print(f"{tweet_file} was not downloaded properly")
+            
         else:
-            ini_top_words, _, good_masked_sentence = MLM(masked_sentence, given_keywords, thres=5, skip_flag=skip)
-            top_words, top_words_tuple = self.multi_MLM(good_masked_sentence, given_keywords, ini_top_words[:100])
+            masked_sentence = self.data
+        
+        if not multi:
+            top_words, top_words_tuple, _ = self.MLM(masked_sentence, given_keywords, thres=self.thres, skip_flag=skip, filter_uninformative=0)
+        else:
+            ini_top_words, _, good_masked_sentences = self.MLM(masked_sentence, given_keywords, thres=self.thres, skip_flag=skip, filter_uninformative=0)
+            top_words, top_words_tuple = self.multi_MLM(good_masked_sentences, given_keywords, ini_top_words, thres=self.thres)
 
         return top_words
     
