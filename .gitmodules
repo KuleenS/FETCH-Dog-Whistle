@@ -1,9 +1,3 @@
-[submodule "src/euphemism_detection/EPD"]
-	path = src/euphemism_detection/EPD
-	url = https://github.com/KuleenS/EPD.git
-[submodule "src/euphemism_detection/Euphemism"]
-	path = src/euphemism_detection/Euphemism
-	url = https://github.com/KuleenS/Euphemism.git
 [submodule "src/euphemism_detection/AutoPhrase"]
 	path = src/euphemism_detection/AutoPhrase
 	url = https://github.com/shangjingbo1226/AutoPhrase.git
