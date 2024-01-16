@@ -1,23 +1,116 @@
+from collections import defaultdict
+
 import gzip
 
 import json
 
 import random
 
-from typing import Dict, List
+import string
+
+from typing import List
 
 import nltk
 
+import torch
+
+from transformers import AutoTokenizer, AutoModelForMaskedLM
+
 from tqdm import tqdm
 
-from Euphemism.detection import MLM
+from nltk.corpus import stopwords
+
+nltk.download('stopwords')
 
 class SingleNeuralEuphemismDetector: 
 
-    def __init__(self, given_keywords: List[str], data: List[str], data_is_tweets: bool = False):
+    def __init__(self, given_keywords: List[str], data: List[str], thres : int, model_name: str, data_is_tweets: bool = False):
         self.given_keywords = given_keywords
         self.data = data
         self.data_is_tweets = data_is_tweets
+        self.thres = thres
+
+        self.model_name = model_name
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # bert_tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+        self.bert_tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+
+        # bert_model = BertForMaskedLM.from_pretrained("bert-base-uncased").to(device)
+        self.bert_model = AutoModelForMaskedLM.from_pretrained(self.model_name).to(self.device)
+
+        self.PAD = self.bert_tokenizer.pad_token
+        self.MASK = self.bert_tokenizer.mask_token
+        self.CLS = self.bert_tokenizer.cls_token
+        self.SEP = self.bert_tokenizer.sep_token
+
+    def single_MLM(self, message, threshold):
+
+        max_length = self.bert_model.config.max_position_embeddings - 2
+
+        tokens = self.bert_tokenizer(message, truncation=True, max_length=max_length, return_tensors="pt")
+
+        tokenized = self.bert_tokenizer.tokenize(message, truncation=True)[:max_length]
+
+        tokens.to(self.device)
+
+        with torch.no_grad():
+            output = self.bert_model(**tokens)
+        
+        logits = output.logits
+
+        logits = logits.squeeze(0)
+        probs = torch.softmax(logits, dim=-1)
+
+        out = []
+
+        for idx, token in enumerate(tokenized):
+            if token.strip() == self.MASK:
+                topk_prob, topk_indices = torch.topk(probs[idx, :], threshold)
+                topk_tokens = self.bert_tokenizer.convert_ids_to_tokens(topk_indices.cpu().numpy())
+                out = [[topk_tokens[i], float(topk_prob[i])] for i in range(threshold)]
+
+        return out
+
+
+    def MLM(self, sgs, input_keywords, thres=1, filter_uninformative=1):
+        MLM_score = defaultdict(float)
+
+        sgs = [x.replace("[MASK]", self.MASK) for x in sgs]
+
+        temp = sgs if len(sgs) < 10 else tqdm(sgs)
+        skip_ms_num = 0
+        good_sgs = []
+
+        for sgs_i in temp:
+            top_words = self.single_MLM(sgs_i, thres)
+            seen_input = 0
+            for input_i in input_keywords:
+                if input_i in [x[0] for x in top_words[:thres]]:
+                    seen_input += 1
+            if filter_uninformative == 1 and seen_input < 2:
+                skip_ms_num += 1
+                continue
+            good_sgs.append(sgs_i)
+            for j in top_words:
+                if j[0] in string.punctuation:
+                    continue
+                if j[0] in stopwords.words('english'):
+                    continue
+                if j[0] in input_keywords:
+                    continue
+                if j[0] in ['drug', 'drugs']:  # exclude these two for the drug dataset.
+                    continue
+                if j[0][:2] == '##':  # the '##' by BERT indicates that is not a word.
+                    continue
+                MLM_score[j[0]] += j[1]
+            # print(sgs_i)
+            # print([x[0] for x in top_words[:20]])
+        out = sorted(MLM_score, key=lambda x: MLM_score[x], reverse=True)
+        out_tuple = [[x, MLM_score[x]] for x in out]
+        if len(sgs) >= 10:
+            print('The percentage of uninformative masked sentences is {:d}/{:d} = {:.2f}%'.format(skip_ms_num, len(sgs), float(skip_ms_num)/len(sgs)*100))
+        return out, out_tuple, good_sgs
         
     
     def euphemism_detection(self, input_keywords, files, ms_limit, filter_uninformative):
@@ -90,13 +183,13 @@ class SingleNeuralEuphemismDetector:
         else:
             masked_sentence = self.data
         
-        top_words, _, _ = MLM(masked_sentence, input_keywords, thres=5, filter_uninformative=filter_uninformative)
+        top_words, _, _ = self.MLM(masked_sentence, input_keywords, self.thres, filter_uninformative=filter_uninformative)
 
         return top_words
     
     def run(self):
         input_keywords = [x.lower().strip() for x in self.given_keywords]
 
-        top_words = self.euphemism_detection(input_keywords, self.data, ms_limit=2000, filter_uninformative=1)
+        top_words = self.euphemism_detection(input_keywords, self.data, ms_limit=2000, filter_uninformative=0)
 
         return top_words
