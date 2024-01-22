@@ -1,5 +1,7 @@
 import os
 
+from typing import List, Tuple
+
 import milvus
 
 from pymilvus import (
@@ -44,11 +46,11 @@ class MilvusDB:
         )
 
         schema = CollectionSchema(
-            fields=[tweet_id, tweet, dogwhistle, embedding],
+            fields=[tweet_id, post, dogwhistle, embedding],
             description="Semantic Tweet Lookup",
         )
 
-        post_lookup = Collection(collection_name, schema, using='default')
+        self.post_lookup = Collection(collection_name, schema, using='default')
 
         self.collection_name = collection_name
         
@@ -70,7 +72,7 @@ class MilvusDB:
         for batch in batches:
             task_id = utility.do_bulk_insert(
                 collection_name=self.collection_name,
-                files=[os.path.join(input_folder, x) for x in self.files]
+                files=[os.path.join(batch, x) for x in self.files]
             )
 
             task_ids.append(task_id)
@@ -78,7 +80,7 @@ class MilvusDB:
         utility.wait_for_index_building_complete(self.collection_name)
     
     def create_index(self):
-        collection.create_index(
+        self.post_lookup.create_index(
             field_name="embeddings", 
             index_params=self.index_params
         )
@@ -96,16 +98,16 @@ class MilvusDB:
             "expr": f"not (tweet_id in {documents_not_to_include})",
         }
 
-        res = collection.search(**search_param)
+        res = self.post_lookup.search(**search_param)
 
         return res
     
     def calculate_seed_word_centroid(self, seed_word: str) -> Tuple[np.ndarray, np.ndarray]:
-        res = collection.query(
+        res = self.post_lookup.query(
             expr = f"dogwhistle == {seed_word}",
             output_fields = ["tweet_id", "embeddings"],
         )
 
-        return res[tweet_id], np.array(res["embeddings"]).mean(axis=1)
+        return res["tweet_id"], np.array(res["embeddings"]).mean(axis=1)
     
     
