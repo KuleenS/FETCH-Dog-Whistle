@@ -92,9 +92,9 @@ def main(args):
                     dogwhistle_found = np.array(dogwhistle_found)
                     embeddings = np.array(embeddings)
 
-                    np.save(os.path.join(output_folder), f"documents_batch_{batch_id}.npy", documents)
-                    np.save(os.path.join(output_folder), f"dogwhistles_found_batch_{batch_id}.npy", dogwhistle_found)
-                    np.save(os.path.join(output_folder), f"embeddings_batch_{batch_id}.npy", embeddings)
+                    np.save(os.path.join(output_folder), batch_id, f"documents_batch.npy", documents)
+                    np.save(os.path.join(output_folder), batch_id, f"dogwhistles_found_batch.npy", dogwhistle_found)
+                    np.save(os.path.join(output_folder), batch_id, f"embeddings_batch.npy", embeddings)
 
                     batch_id += 1
 
@@ -112,9 +112,9 @@ def main(args):
             dogwhistle_found = np.array(dogwhistle_found)
             embeddings = np.array(embeddings)
 
-            np.save(os.path.join(output_folder), f"documents_batch_{batch_id}.npy", documents)
-            np.save(os.path.join(output_folder), f"dogwhistles_found_batch_{batch_id}.npy", dogwhistle_found)
-            np.save(os.path.join(output_folder), f"embeddings_batch_{batch_id}.npy", embeddings)
+            np.save(os.path.join(output_folder), batch_id, f"documents_batch.npy", documents)
+            np.save(os.path.join(output_folder), batch_id, f"dogwhistles_found_batch.npy", dogwhistle_found)
+            np.save(os.path.join(output_folder), batch_id, f"embeddings_batch.npy", embeddings)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
