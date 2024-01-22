@@ -91,7 +91,7 @@ class MilvusDB:
     def get_top_k_documents(self, documents_not_to_include: List[int], centroid: List[float], top_k: int) -> List[str]:
         
         search_param = {
-            "data": [[0.1, 0.2]],
+            "data": [centroid],
             "anns_field": "embeddings",
             "param": {"metric_type": "IP"},
             "limit": top_k,
