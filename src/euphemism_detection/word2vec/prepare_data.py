@@ -45,6 +45,8 @@ def main(args):
             
             except (zlib.error, gzip.BadGzipFile):
                 tweets = []
+            
+            tweet_ids = set()
 
             try:
                 while True:
@@ -65,22 +67,32 @@ def main(args):
                                     continue
 
                             if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
+                                if tweet["id_str"] in tweet_ids:
                                     tweet_text = tweet["text"]
-                                
-                            
+                                    tweet_ids.add(tweet["id_str"])
+                                else:
+                                    tweet_text = ""
+                
                             elif "body" in tweet:
-                                tweet_text = tweet["body"]
-        
+                                if tweet["id"] in tweet_ids:
+                                    tweet_text = tweet["body"]
+                                    tweet_ids.add(tweet["id"])
+                                
+                                else:
+                                    tweet_text = ""
+
                                 if not isinstance(tweet_text, str):
                                     tweet_text = ""
 
-                            doc = nlp(tweet_text)
+                            if len(tweet_text) != 0:
 
-                            filtered_text = " ".join([token.lemma_ for token in doc if not token.is_stop])
+                                doc = nlp(tweet_text)
 
-                            normalized_text = " ".join(tokenizer.tokenize(filtered_text)).replace("\n", "")
+                                filtered_text = " ".join([token.lemma_ for token in doc if not token.is_stop])
 
-                            results.append(normalized_text)
+                                normalized_text = " ".join(tokenizer.tokenize(filtered_text)).replace("\n", "")
+
+                                results.append(normalized_text)
 
                             if len(results) > 500:
                                 writer_csv.writerows(results)
