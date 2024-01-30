@@ -2,8 +2,6 @@ import json
 
 import argparse
 
-import itertools
-
 RULE_DEFAULT = 0
 RULE_DISCARD = 1
 RULE_KEEP = 2
