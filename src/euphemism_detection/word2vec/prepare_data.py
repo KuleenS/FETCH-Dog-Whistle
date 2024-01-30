@@ -1,7 +1,3 @@
-
-
-
-
 import argparse
 
 import csv
@@ -11,8 +7,6 @@ import gzip
 import json
 
 import os
-
-import re
 
 import zlib
 
@@ -35,7 +29,7 @@ def main(args):
 
     with open(os.path.join(args.output_folder, f"tweets_{sge_id}.txt"), "w") as f:
 
-        writer_csv = csv.writer(f)
+        writer_csv = csv.writer(f, quoting=csv.QUOTE_NONE, quotechar='', escapechar='\\')
 
         for i, tweet_file in tqdm(enumerate(input_files), desc="Twitter Files"):
 

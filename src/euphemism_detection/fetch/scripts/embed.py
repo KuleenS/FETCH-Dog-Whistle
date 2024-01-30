@@ -32,7 +32,7 @@ def on_match(id: int, start: int, end: int, flags: int, context: Context) -> Non
     context.results.append(matched_item)
 
 def main(args): 
-    input_file = args.tweet_file
+    input_files = args.input_files
 
     sge_id = args.id
     
@@ -66,60 +66,62 @@ def main(args):
         expressions=expressions, ids=ids, elements=len(patterns), flags=flags
     )
 
-    batch_id = 0
+    for input_file in input_files:
 
-    with open(input_file, mode ='r') as file:
-        csvFile = csv.reader(file)
+        batch_id = 0
 
-        results = []
+        with open(input_file, mode ='r') as file:
+            csvFile = csv.reader(file)
 
-        with db.stream(match_event_handler=on_match) as stream:
+            results = []
 
-            for batch in chunked(csvFile, 32):
+            with db.stream(match_event_handler=on_match) as stream:
 
-                embeddings_out = model.embed(batch)
+                for batch in chunked(csvFile, 32):
 
-                embeddings.extend(embeddings_out)
+                    embeddings_out = model.embed(batch)
 
-                documents.extend(batch)
+                    embeddings.extend(embeddings_out)
 
-                for tweet_text in batch:
+                    documents.extend(batch)
 
-                    stream.scan(tweet_text.encode("utf-8"), context = Context(patterns, tweet_text, results))
-                            
-                if len(documents) % 102400 == 0 and len(documents) != 0:
-                    documents = np.array(documents)
-                    dogwhistle_found = np.array(dogwhistle_found)
-                    embeddings = np.array(embeddings)
+                    for tweet_text in batch:
 
-                    np.save(os.path.join(output_folder), batch_id, f"documents.npy", documents)
-                    np.save(os.path.join(output_folder), batch_id, f"dogwhistles.npy", dogwhistle_found)
-                    np.save(os.path.join(output_folder), batch_id, f"embeddings.npy", embeddings)
+                        stream.scan(tweet_text.encode("utf-8"), context = Context(patterns, tweet_text, results))
+                                
+                    if len(documents) % 102400 == 0 and len(documents) != 0:
+                        documents = np.array(documents)
+                        dogwhistle_found = np.array(dogwhistle_found)
+                        embeddings = np.array(embeddings)
 
-                    batch_id += 1
+                        np.save(os.path.join(output_folder), batch_id, f"documents.npy", documents)
+                        np.save(os.path.join(output_folder), batch_id, f"dogwhistles.npy", dogwhistle_found)
+                        np.save(os.path.join(output_folder), batch_id, f"embeddings.npy", embeddings)
 
-                    documents = []
-                    dogwhistle_found = []
-                    embeddings = []
+                        batch_id += 1
 
-                    results = []
+                        documents = []
+                        dogwhistle_found = []
+                        embeddings = []
 
-            embeddings_batch = model.embed(batch)
+                        results = []
 
-            embeddings.extend(embeddings_batch)
-            
-            documents = np.array(documents)
-            dogwhistle_found = np.array(dogwhistle_found)
-            embeddings = np.array(embeddings)
+                embeddings_batch = model.embed(batch)
 
-            np.save(os.path.join(output_folder), batch_id, f"documents.npy", documents)
-            np.save(os.path.join(output_folder), batch_id, f"dogwhistles.npy", dogwhistle_found)
-            np.save(os.path.join(output_folder), batch_id, f"embeddings.npy", embeddings)
+                embeddings.extend(embeddings_batch)
+                
+                documents = np.array(documents)
+                dogwhistle_found = np.array(dogwhistle_found)
+                embeddings = np.array(embeddings)
+
+                np.save(os.path.join(output_folder), batch_id, f"documents.npy", documents)
+                np.save(os.path.join(output_folder), batch_id, f"dogwhistles.npy", dogwhistle_found)
+                np.save(os.path.join(output_folder), batch_id, f"embeddings.npy", embeddings)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--output_path')
-    parser.add_argument('--input_path')
+    parser.add_argument('--input_files', nargs="+")
     parser.add_argument('--dogwhistle_file_path')
     parser.add_argument('--id', type=int)
     args = parser.parse_args()
