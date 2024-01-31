@@ -21,7 +21,7 @@ class DogwhistleSplitter:
         self.dogwhistles = defaultdict(list)
 
         for i in range(len(dogwhistle_set)):
-            self.dogwhistles[comparison_set[i]] = [x.strip() for x in dogwhistle_set[i]]
+            self.dogwhistles[comparison_set[i]] = [x.strip().lower() for x in dogwhistle_set[i]]
 
         self.ngrams = {x : min([len(word_tokenize(y)) for y in self.dogwhistles[x]]) for x in comparison_set}
         
