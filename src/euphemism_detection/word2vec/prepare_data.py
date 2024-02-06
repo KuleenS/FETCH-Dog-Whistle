@@ -10,6 +10,8 @@ import os
 
 import zlib
 
+import pybloomfilter
+
 from littlebird import BERTweetTokenizer
 
 import spacy
@@ -25,11 +27,13 @@ def main(args):
 
     tokenizer = BERTweetTokenizer()
 
-    nlp = spacy.load("en_core_web_md")
+    nlp = spacy.load("en_core_web_sm")
+
+    nlp.disable_pipes('ner', 'tagger', 'parser', 'tok2vec', 'attribute_ruler')
 
     with open(os.path.join(args.output_folder, f"tweets_{sge_id}.txt"), "w") as f:
 
-        writer_csv = csv.writer(f, quoting=csv.QUOTE_NONE, quotechar='', escapechar='\\')
+        writer_csv = csv.writer(f, escapechar='\\')
 
         for i, tweet_file in tqdm(enumerate(input_files), desc="Twitter Files"):
 
@@ -40,7 +44,8 @@ def main(args):
             except (zlib.error, gzip.BadGzipFile):
                 tweets = []
             
-            tweet_ids = set()
+
+            tweet_ids = pybloomfilter.BloomFilter(100_000_000, 0.01)
 
             try:
                 while True:
@@ -61,14 +66,14 @@ def main(args):
                                     continue
 
                             if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
-                                if tweet["id_str"] in tweet_ids:
+                                if tweet["id"] not in tweet_ids:
                                     tweet_text = tweet["text"]
-                                    tweet_ids.add(tweet["id_str"])
+                                    tweet_ids.add(tweet["id"])
                                 else:
                                     tweet_text = ""
                 
                             elif "body" in tweet:
-                                if tweet["id"] in tweet_ids:
+                                if tweet["id"] not in tweet_ids:
                                     tweet_text = tweet["body"]
                                     tweet_ids.add(tweet["id"])
                                 
@@ -86,13 +91,13 @@ def main(args):
 
                                 normalized_text = " ".join(tokenizer.tokenize(filtered_text)).replace("\n", "")
 
-                                results.append(normalized_text)
+                                results.append([normalized_text])
 
                             if len(results) > 500:
                                 writer_csv.writerows(results)
                                 results = []
-                    except:
-                        print(f"tweet was bad")
+                    except Exception as e:
+                        print(e)
             
             except EOFError:
                 print(f"{tweet_file} was not downloaded properly")
