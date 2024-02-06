@@ -9,7 +9,7 @@ import pandas as pd
 
 from gensim.models import Word2Vec
 
-from src.euphemism_detection.word2vec.tracker import Tracker
+from tracker import Tracker
 
 def initialize_output_directory(args):
     """
@@ -17,11 +17,7 @@ def initialize_output_directory(args):
     """
     if args.output_dir is None:
         raise ValueError("Please specify an --output_dir")
-    if os.path.exists(args.output_dir):
-        if not args.rm_existing:
-            raise FileExistsError("Output directory already exists. Include --rm_existing flag to remove.")
-        _ = os.system(f"rm -rf {args.output_dir}")
-    _ = os.makedirs(args.output_dir)
+    _ = os.makedirs(args.output_dir, exist_ok = True)
     return args.output_dir
 
 def get_ordered_vocabulary(model):
@@ -65,6 +61,14 @@ def find_vocabulary_terms(keywords,
     ## Return
     return term2keyword
 
+def get_similar(model,
+                word,
+                top_k=10):
+        """
+        
+        """
+        return model.wv.similar_by_word(word, top_k)
+
 def main(args):
     print("[Parsing Command Line]")
     print(f"[Initializing Output Directory: '{args.output_dir}']")
@@ -89,7 +93,7 @@ def main(args):
     for round in range(args.n_rounds):
         print(f">> Round {round+1}/{args.n_rounds}")
         ## Run Search
-        round_expansion = {q:[i[0] for i in model.get_similar(q, top_k=args.top_k)] for q in queries}
+        round_expansion = {q:[i[0] for i in get_similar(model, q, top_k=args.top_k)] for q in queries}
         ## Track New Terms
         round_new = []
         ## Parse Search Result
