@@ -24,7 +24,6 @@ def main(args):
 
     model.save(os.path.join(args.output_dir, "word2vec.model"))
 
-
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
