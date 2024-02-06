@@ -1,12 +1,12 @@
 from typing import List
 
-from fast_sentence_transformers import FastSentenceTransformer as SentenceTransformer
+from sentence_transformers import SentenceTransformer
 
-class EmbeddingModel:
+class SentenceTransformerEmbedder:
 
     def __init__(self, device: str, model_name: str = "all-MiniLM-L6-v2") -> None:
 
-        self.model = SentenceTransformer(model_name, device=device, quantize=True)
+        self.model = SentenceTransformer(model_name, device=device)
     
     def embed(self, batch: List[str]) -> List[List[float]]:
 
