@@ -24,9 +24,9 @@ class Metrics:
         self.dogwhistle_to_surface = defaultdict(list)
 
         for i in range(len(dogwhistle_set)):
-            self.dogwhistle_to_surface[comparison_set[i]] = [x.strip() for x in dogwhistle_set[i]]
+            self.dogwhistle_to_surface[comparison_set[i]] = [x.strip().lower() for x in dogwhistle_set[i]]
 
-        self.ngrams = {x : min([len(word_tokenize(y)) for y in self.dogwhistle_to_surface[x]]) for x in comparison_set}
+        self.ngrams = {x.strip().lower() : min([len(word_tokenize(y)) for y in self.dogwhistle_to_surface[x]]) for x in comparison_set}
 
         self.dogwhistles = dict()
 
