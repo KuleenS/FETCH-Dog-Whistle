@@ -41,7 +41,7 @@ if __name__ == "__main__":
     parser.add_argument('--dogwhistle_file_path')
     parser.add_argument('--extrapolating_dogwhistle_path')
     parser.add_argument('--expansions_path')
-    parser.add_argument('--ngrams_possible')
+    parser.add_argument('--ngrams_possible', type=int)
 
     args = parser.parse_args()
     main(args)
