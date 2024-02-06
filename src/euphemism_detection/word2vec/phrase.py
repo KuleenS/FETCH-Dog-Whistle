@@ -6,6 +6,8 @@ import json
 
 import csv
 
+from tqdm import tqdm
+
 def original_scorer(worda_count, wordb_count, bigram_count, len_vocab, min_count, corpus_word_count):
     r"""Bigram scoring function, based on the original `Mikolov, et. al: "Distributed Representations
     of Words and Phrases and their Compositionality" <https://arxiv.org/abs/1310.4546>`_.
@@ -124,7 +126,7 @@ def analyze_sentence(sentence, connector_words, vocab):
 
 def main(args):
 
-    with open(input_file) as f:
+    with open(args.vocab) as f:
         vocab = json.load(f)
 
     connector_words = frozenset(
@@ -134,7 +136,7 @@ def main(args):
         .split()    
     )
     
-    for input_file in args.input_files:
+    for input_file in tqdm(args.input_files, desc="Input Files"):
 
         out_file = os.path.basename(input_file)
 
@@ -144,16 +146,19 @@ def main(args):
             writer_csv = csv.writer(out)
 
             with open(input_file) as in_file:
-                for line in in_file:
-                    sentence = line.strip().split()
+                
+                csv_in_file = csv.reader(in_file)
 
-                    results.append(" ".join([token for token, _ in analyze_sentence(sentence, connector_words, vocab)]))
+                for line in tqdm(csv_in_file, desc="Lines in File"):
+                    sentence = line[0].strip().split()
+
+                    results.append([" ".join([token for token, _ in analyze_sentence(sentence, connector_words, vocab)])])
 
                     if len(results) > 500:
                         writer_csv.writerows(results)
                         results = []
                     
-                    writer_csv.writerows(results)
+                writer_csv.writerows(results)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
