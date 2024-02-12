@@ -11,7 +11,7 @@ def main(args):
 
     collection_name = os.path.basename(args.embeddings_store)
 
-    db = MilvusDB(collection_name)
+    db = MilvusDB(collection_name, 768)
 
     db.load_data(args.embeddings_store)
 
@@ -51,7 +51,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--embeddings_store")
 
-    parser.add_argument("--top_k_documents")
+    parser.add_argument("--top_k_documents", type=int)
 
     parser.add_argument("--output_path")
 

@@ -108,6 +108,8 @@ def main(args):
                                 except json.decoder.JSONDecodeError:
                                     print("Decode failure")
                                     continue
+                                
+                            tweet_text = ""
 
                             if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
                                 

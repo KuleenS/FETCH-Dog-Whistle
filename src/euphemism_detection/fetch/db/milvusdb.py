@@ -2,7 +2,7 @@ import os
 
 from typing import List, Tuple
 
-import milvus
+from milvus import default_server
 
 from pymilvus import (
     connections,
@@ -16,8 +16,12 @@ import numpy as np
 class MilvusDB:
 
     def __init__(self, collection_name: str, dim: int) -> None:
-        milvus.start()
-        connections.connect("default", host="localhost", port="19530")
+
+        default_server.start()
+
+        connections.connect(host='127.0.0.1', port=default_server.listen_port)
+
+        print(utility.get_server_version())
 
         tweet_id = FieldSchema(
             name="tweet_id",
@@ -29,7 +33,7 @@ class MilvusDB:
         post = FieldSchema(
             name="post",
             dtype=DataType.VARCHAR,
-            max_length=400,
+            max_length=450,
             default_value="Unknown"
         )
 
