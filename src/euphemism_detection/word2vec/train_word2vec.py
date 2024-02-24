@@ -2,10 +2,14 @@ import argparse
 
 import os
 
+import logging
+
 from gensim.models import Word2Vec
 from gensim.models.word2vec import PathLineSentences
 import multiprocessing
 
+logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', 
+                    level=logging.INFO)
 
 def main(args):
     model = Word2Vec(sentences=PathLineSentences(args.input_dir),
