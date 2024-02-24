@@ -1,6 +1,6 @@
-from collections import defaultdict
+import csv
 
-import glob
+from collections import defaultdict
 
 import gzip
 
@@ -12,17 +12,12 @@ import random
 
 import string
 
-from typing import Dict, List
-
-from fitbert import FitBert
+from typing import List
 
 import nltk
 
 import numpy as np
 
-import joblib
-
-from gensim.models import Phrases
 from gensim.models.word2vec import Word2Vec as W2V
 
 import torch
@@ -32,6 +27,8 @@ from transformers import AutoTokenizer, AutoModelForMaskedLM
 from tqdm import tqdm
 
 from nltk.corpus import stopwords
+
+from fitbert import FitBert
 
 nltk.download('stopwords')
 
@@ -158,20 +155,6 @@ class MultiNeuralEuphemismDetector:
     #     model.wv.save_word2vec_format(embed_fn, binary=False)
     #     return model
     
-    def loadw2v(self, directory):
-        ## Check Existence
-        if not os.path.exists(directory):
-            raise ValueError(f"Model not found at path: {directory}")
-        ## Load Class
-        w2v = joblib.load(f"{directory}word2vec.class")
-        ## Load Model
-        phraser_files = sorted(glob(f"{directory}/phraser.*"), key=lambda x: int(x.split("/")[-1].split(".")[-1]))
-        w2v.phrasers = [Phrases.load(pf) for pf in phraser_files]
-        if os.path.exists(f"{directory}word2vec.model"):
-            w2v.model = W2V.load(f"{directory}word2vec.model")
-        else:
-            w2v.model = None
-        return w2v
 
     def rank_by_word2vec(self, given_keywords, phrase_cand):
         new_text = []
@@ -183,9 +166,9 @@ class MultiNeuralEuphemismDetector:
         if not os.path.isdir(self.output_dir):
             os.mkdir(self.output_dir) 
 
-        word2vec_model = self.loadw2v(self.word_2_vec)
-
-        emb_dict = word2vec_model.keyedvectors
+        word2vec_model = W2V.load(self.word_2_vec)
+        
+        emb_dict = word2vec_model.wv
 
         target_vector = []
         seq = []
@@ -195,44 +178,61 @@ class MultiNeuralEuphemismDetector:
                 seq.append(i)
         target_vector = np.array(target_vector)
         target_vector_ave = np.sum(target_vector, 0) / len(target_vector)
-        out = [' '.join(x[0].split('_')) for x in word2vec_model.wv.similar_by_vector(target_vector_ave, topn=len(emb_dict.vocab)) if '_' in x[0] and not any(y in given_keywords for y in x[0].split('_'))]
+        out = [' '.join(x[0].split('_')) for x in word2vec_model.wv.similar_by_vector(target_vector_ave, topn=1000) if not any(y in given_keywords for y in x[0].split('_'))]
         return out, []
     
     def rank_by_spanbert(self, phrase_cand, sgs, drug_formal, thres):
         fb = FitBert(model=self.bert_model, tokenizer=self.bert_tokenizer, mask_token=self.MASK)
         MLM_score = defaultdict(float)
         temp = sgs if len(sgs) < 10 else tqdm(sgs)
-        for sgs_i in temp:
+        for i, sgs_i in enumerate(temp):
             if not any(x in sgs_i for x in drug_formal):
                 continue
-            temp = fb.rank_multi(sgs_i, phrase_cand)
-            scores = [x / max(temp[1]) for x in temp[1]]
-            scores = fb.softmax(torch.tensor(scores).unsqueeze(0)).tolist()[0]
-            top_words = [[temp[0][i], scores[i]] for i in range(min(len(temp[0]), thres))]
-            for j in top_words:
-                if j[0] in string.punctuation:
-                    continue
-                if j[0] in nltk.corpus.stopwords.words('english'):
-                    continue
-                if j[0] in drug_formal:
-                    continue
-                if j[0] in ['drug', 'drugs']:
-                    continue
-                if j[0][:2] == '##':  # the '##' by BERT indicates that is not a word.
-                    continue
-                MLM_score[j[0]] += j[1]
-            print(sgs_i)
-            print([x[0] for x in top_words[:20]])
-        out = sorted(MLM_score, key=lambda x: MLM_score[x], reverse=True)
-        out_tuple = [[x, MLM_score[x]] for x in out]
-        return out, out_tuple
+            words, scores = fb.rank_multi(sgs_i, phrase_cand)
+
+            top_words = [[words[i], scores[i]] for i in range(min(len(words), thres))]
+
+            with open(os.path.join(self.output_dir, f"output_words_{i}.csv"), "w") as f:
+                
+                csvwrite = csv.writer(f)
+
+                csvwrite.writerow(["word", "score"])
+
+                csvwrite.writerows(top_words)
+
+            # for j in top_words:
+            #     if j[0] in string.punctuation:
+            #         continue
+            #     if j[0] in nltk.corpus.stopwords.words('english'):
+            #         continue
+            #     if j[0] in drug_formal:
+            #         continue
+            #     if j[0] in ['drug', 'drugs']:
+            #         continue
+            #     if j[0][:2] == '##':  # the '##' by BERT indicates that is not a word.
+            #         continue
+            #     MLM_score[j[0]] += j[1]
+        
+        # out = sorted(MLM_score, key=lambda x: MLM_score[x], reverse=True)
+
+        # out_tuple = [[x, MLM_score[x]] for x in out]
+
+        # return out, out_tuple
 
     def multi_MLM(self, sentences: List[str], given_keywords: List[str], top_words: List[str], thres: int):
+        print("input cand", len(self.phrase_candidates))
+
         phrase_cand = self.filter_phrase(self.phrase_candidates, top_words)
+
+        print("output cand", len(phrase_cand))
 
         phrase_cand, _ = self.rank_by_word2vec(phrase_cand, given_keywords)
 
+        print("output cand", len(phrase_cand))
+
         phrase_cand, _ = self.rank_by_spanbert(phrase_cand, sentences, given_keywords, thres)
+
+        print("output cand", len(phrase_cand))
         
         return phrase_cand, []
 
@@ -298,9 +298,9 @@ class MultiNeuralEuphemismDetector:
             masked_sentence = self.data
         
         if not multi:
-            top_words, top_words_tuple, _ = self.MLM(masked_sentence, given_keywords, thres=self.thres, skip_flag=skip, filter_uninformative=0)
+            top_words, top_words_tuple, _ = self.MLM(masked_sentence, given_keywords, thres=self.thres, filter_uninformative=0)
         else:
-            ini_top_words, _, good_masked_sentences = self.MLM(masked_sentence, given_keywords, thres=self.thres, skip_flag=skip, filter_uninformative=0)
+            ini_top_words, _, good_masked_sentences = self.MLM(masked_sentence, given_keywords, thres=self.thres, filter_uninformative=0)
             top_words, top_words_tuple = self.multi_MLM(good_masked_sentences, given_keywords, ini_top_words, thres=self.thres)
 
         return top_words
