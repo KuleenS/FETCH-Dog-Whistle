@@ -130,7 +130,12 @@ def main(args):
 
                             batch.append(tweet_text)
 
+                            length_dogwhistles = len(dogwhistle_found)
+
                             stream.scan(tweet_text.encode("utf-8"), context = Context(patterns, tweet_text, dogwhistle_found))
+
+                            if len(dogwhistle_found) == length_dogwhistles:
+                                dogwhistle_found.append(None)
                             
                             if len(batch) == 32:
                                 embeddings_out = model.embed(batch)
@@ -141,7 +146,7 @@ def main(args):
 
                                 batch = []
 
-                            if len(documents) % 102400 == 0 and len(documents) != 0:
+                            if len(documents) % 1_024_000 == 0 and len(documents) != 0:
                                 documents = np.array(documents)
                                 dogwhistle_found = np.array(dogwhistle_found)
                                 embeddings = np.array(embeddings)
@@ -151,9 +156,7 @@ def main(args):
                                 if not os.path.exists(out):
                                     os.makedirs(out, exist_ok=True)
 
-                                np.save(os.path.join(output_folder, str(batch_id), f"documents.npy"), documents)
-                                np.save(os.path.join(output_folder, str(batch_id), f"dogwhistles.npy"), dogwhistle_found)
-                                np.save(os.path.join(output_folder, str(batch_id), f"embeddings.npy"), embeddings)
+                                np.savez(os.path.join(output_folder, str(batch_id), f"data.npz"), documents=documents, dogwhistles=dogwhistle_found, embeddings=embeddings)
 
                                 batch_id += 1
 
@@ -179,9 +182,8 @@ def main(args):
                 dogwhistle_found = np.array(dogwhistle_found)
                 embeddings = np.array(embeddings)
 
-                np.save(os.path.join(output_folder, str(batch_id), f"documents.npy"), documents)
-                np.save(os.path.join(output_folder, str(batch_id), f"dogwhistles.npy"), dogwhistle_found)
-                np.save(os.path.join(output_folder, str(batch_id), f"embeddings.npy"), embeddings)
+                np.savez(os.path.join(output_folder, str(batch_id), f"data.npz"), documents=documents, dogwhistles=dogwhistle_found, embeddings=embeddings)
+
                         
 
 if __name__ == "__main__":
