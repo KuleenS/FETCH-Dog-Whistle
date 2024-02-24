@@ -1,83 +1,84 @@
 import argparse
 
+import csv
+
 import os
 
 from multiple_neural_euphemism import MultiNeuralEuphemismDetector
 
 from utils import DogwhistleSplitter
 
+from metrics import Metrics
+
 
 def main(args):
-    tweet_files = args.tweet_files
+    # tweet_files = args.tweet_files
 
-    possible_dogwhistles = args.possible_dogwhistles
+    # possible_dogwhistles = args.possible_dogwhistles
 
-    dogwhistle_path = args.dogwhistle_file_path
+    # dogwhistle_path = args.dogwhistle_file_path
 
     phrase_path = args.phrase_candidate_folder
 
     word2vec_path = args.word2vec_file
 
-    splitter = DogwhistleSplitter(dogwhistle_path, possible_dogwhistles)
+    # splitter = DogwhistleSplitter(dogwhistle_path, possible_dogwhistles)
 
-    given_dogwhistles_surface_forms, extrapolating_dogwhistles_surface_forms = splitter.split()
+    # given_dogwhistles_surface_forms, extrapolating_dogwhistles_surface_forms = splitter.split()
 
-
-    with open(os.path.join(phrase_path, "final_quality_salient.txt"), "r") as f:
-        salient_phrases = f.readlines()
-
-    with open(os.path.join(phrase_path, "final_quality_unigrams.txt"), "r") as f:
-        salient_unigrams = f.readlines()
-
-    with open(os.path.join(phrase_path, "token_mapping.txt"), "r") as f:
-        token_mapping = f.readlines()
-
-    salient_phrases = [x.strip().split("\t")[1].split(" ") for x in salient_phrases]
-    salient_unigrams = [x.strip().split("\t")[1] for x in salient_unigrams]
-
-    token_mapping = [x.split(" ") for x in token_mapping]
-
-    token_mapping = {x[0] : x[1] for x in token_mapping}
-
-    for i in range(len(salient_phrases)):
-        salient_phrase = salient_phrases[i]
-
-        for j in range(len(salient_phrase)):
-            salient_phrases[i][j] = token_mapping[salient_phrases]
+    with open(os.path.join(args.dogwhistle_path, "given_dogwhistles.csv"), "r") as f:
+        given_dogwhistles_surface_forms = f.readlines()
     
-    for i in range(len(salient_unigrams)):
-        salient_unigrams[i] = token_mapping[salient_unigrams[i]]
+    with open(os.path.join(args.dogwhistle_path, "extrapolating_dogwhistles_surface_forms.csv"), "r") as f:
+        extrapolating_dogwhistles_surface_forms = f.readlines()
     
-    phrases = []
+    extrapolating_dogwhistles_surface_forms = [x.strip().lower() for x in extrapolating_dogwhistles_surface_forms]
 
-    for i in range(len(salient_phrases)):
-        phrases.append(" ".join(salient_phrases[i]))
+    given_dogwhistles_surface_forms = [x.strip().lower() for x in given_dogwhistles_surface_forms]
     
-    phrases += salient_unigrams
+    with open(os.path.join(args.data_path, "sampled_tweets.csv"), "r") as f:
+        reader = csv.reader(f, delimiter="\t")
+        
+        tweet_files = [x[0] for x in reader]
 
-    euphemism_detector = MultiNeuralEuphemismDetector(given_dogwhistles_surface_forms, tweet_files, phrases, word2vec_path, "gab", args.output_path, "SpanBERT/spanbert-base-cased")
+    tweet_files = [x.strip().replace('"', "").replace("'", "").strip("][") for x in tweet_files][1:]
 
-    top_words = euphemism_detector.run()
+    with open(os.path.join(phrase_path, "AutoPhrase.txt"), "r") as f:
+        phrases = f.readlines()
 
-    with open(os.path.join(args.output_path, "given_dogwhistles"), "w") as f:
-        f.write("\n".join(given_dogwhistles_surface_forms))
+    phrases = [x.split("\t")[1].strip() for x in phrases]
+
+    euphemism_detector = MultiNeuralEuphemismDetector(given_dogwhistles_surface_forms, tweet_files, phrases, word2vec_path, args.data_name, args.output_path, args.model_name, args.threshold, True)
+
+    euphemism_detector.run()
     
-    with open(os.path.join(args.output_path, "extrapolating_dogwhistles"), "w") as f:
-        f.write("\n".join(extrapolating_dogwhistles_surface_forms))
-    
-    with open(os.path.join(args.output_path, "top_words"), "w") as f:
-        f.write("\n".join(top_words))
+    # metrics = Metrics(os.path.join(args.dogwhistle_file_path, "glossary.tsv"))
+
+    # precision = metrics.measure_precision(top_words, extrapolating_dogwhistles_surface_forms)
+
+    # recall = metrics.measure_recall(top_words, extrapolating_dogwhistles_surface_forms)
+
+    # possible_recall = metrics.measure_possible_recall(top_words, extrapolating_dogwhistles_surface_forms, 1)
+
+    # print(precision, recall, possible_recall)
+
 
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dogwhistle_file_path')
-    parser.add_argument('--possible_dogwhistles')
+    # parser.add_argument('--dogwhistle_file_path')
+    # parser.add_argument('--possible_dogwhistles')
+    parser.add_argument('--dogwhistle_path')
+    parser.add_argument('--data_path')
     parser.add_argument('--phrase_candidate_folder')
     parser.add_argument('--word2vec_file')
-    parser.add_argument('--tweet_files', nargs='+')
+    # parser.add_argument('--tweet_files', nargs='+')
     parser.add_argument('--output_path')
+    parser.add_argument('--model_name')
+    parser.add_argument('--data_name')
+    parser.add_argument('--threshold', type=int)
+
 
     args = parser.parse_args()
     main(args)
