@@ -2,6 +2,8 @@ import argparse
 
 import csv
 
+from collections import defaultdict
+
 import gzip
 
 import os
@@ -10,7 +12,7 @@ import json
 
 import re
 
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 import zlib
 
@@ -27,29 +29,22 @@ from tqdm import tqdm
 from src.euphemism_detection.fetch.embedding.sentencetransformer import SentenceTransformerEmbedder
 
 class Context:
-    def __init__(self, id_lookup: Tuple[str, int, int], tweet: str, results: List[Tuple[str, str, str]]) -> None:
+    def __init__(self, id_lookup: Tuple[str, int, int], tweet: str, twitter_file: str, results: Dict[str, List[str]]) -> None:
         self.id_lookup = id_lookup
         self.tweet = tweet
+        self.twitter_file = twitter_file
         self.results = results
 
 def on_match(id: int, start: int, end: int, flags: int, context: Context) -> None:
 
     matched_item = context.id_lookup[id][0].decode()
 
-    context.results.append(matched_item)
+    context.results[context.tweet].append(matched_item)
 
 def main(args): 
     input_files = args.input_files
 
     sge_id = args.id
-    
-    embeddings = []
-
-    documents = []
-
-    dogwhistle_found = []
-
-    batch = []
 
     model = SentenceTransformerEmbedder("cuda:0")
 
@@ -63,7 +58,7 @@ def main(args):
 
     dogwhistle_set = [re.escape(x).encode("utf-8") for x in dogwhistle_set]
 
-    db = hyperscan.Database(mode=hyperscan.HS_MODE_STREAM)
+    db = hyperscan.Database()
 
     patterns = tuple(zip(dogwhistle_set, range(len(dogwhistle_set)), [hyperscan.HS_FLAG_CASELESS | hyperscan.HS_FLAG_SINGLEMATCH]*len(dogwhistle_set)))
 
@@ -75,114 +70,124 @@ def main(args):
 
     batch_id = 0
 
-    with db.stream(match_event_handler=on_match) as stream:
 
-        for i, tweet_file in tqdm(enumerate(input_files), desc="Twitter Files"):
+    for i, tweet_file in tqdm(enumerate(input_files), desc="Twitter Files"):
 
+        try:
+
+            tweets = gzip.open(tweet_file, "rt")
+
+        except (zlib.error, gzip.BadGzipFile):
+            tweets = []
+
+        batch = []
+
+        documents = []
+
+        embeddings = []
+
+        dogwhistles_found = defaultdict(list)
+
+        try:
+            while True:
                 try:
+                    tweet = next(tweets)
+                except (IOError, StopIteration, zlib.error):
+                    break
 
-                    tweets = gzip.open(tweet_file, "rt")
-                
-                except (zlib.error, gzip.BadGzipFile):
-                    tweets = []
+                if len(tweet) != 0:
+                    if isinstance(tweet, str):
+                        try: 
+                            tweet = json.loads(tweet)
+                        except json.decoder.JSONDecodeError:
+                            print("Decode failure")
+                            continue
 
-                batch = []
+                    tweet_text = ""
 
-                documents = []
+                    if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
 
-                embeddings = []
+                        tweet_text = tweet["text"].lower().strip()
 
-                dogwhistle_found = []
+                        tweet_text = re.sub(r"https:(\/\/t\.co\/([A-Za-z0-9]|[A-Za-z]){10})", "", tweet_text)
 
-                try:
-                    while True:
-                        try:
-                            tweet = next(tweets)
-                        except (IOError, StopIteration, zlib.error):
-                            break
+                    # dealing with gab data
+                    elif "body" in tweet:
+                        tweet_text = tweet["body"]
 
-                        if len(tweet) != 0:
-                            if isinstance(tweet, str):
-                                try: 
-                                    tweet = json.loads(tweet)
-                                except json.decoder.JSONDecodeError:
-                                    print("Decode failure")
-                                    continue
-                                
+                        if isinstance(tweet_text, str):
+                            tweet_text= tweet_text.lower().strip()
+                        else:
                             tweet_text = ""
 
-                            if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
-                                
-                                tweet_text = tweet["text"].lower()
-                                
-                                tweet_text = re.sub(r"https:(\/\/t\.co\/([A-Za-z0-9]|[A-Za-z]){10})", "", tweet_text)
+                        tweet_text = re.sub(r"http\S+", "", tweet_text)
+                    
+                    if len(tweet_text) != 0:
 
-                            # dealing with gab data
-                            elif "body" in tweet:
-                                tweet_text = tweet["body"]
-        
-                                if isinstance(tweet_text, str):
-                                    tweet_text= tweet_text.lower()
-                                else:
-                                    tweet_text = ""
-                                
-                                tweet_text = re.sub(r"http\S+", "", tweet_text)
+                        batch.append(tweet_text)
 
-                            batch.append(tweet_text)
+                        db.scan(tweet_text.encode("utf-8"), match_event_handler=on_match, context = Context(patterns, tweet_text, tweet_file, dogwhistles_found))
 
-                            length_dogwhistles = len(dogwhistle_found)
+                    if len(batch) == 32:
+                        embeddings_out = model.embed(batch)
 
-                            stream.scan(tweet_text.encode("utf-8"), context = Context(patterns, tweet_text, dogwhistle_found))
+                        embeddings.extend(embeddings_out)
 
-                            if len(dogwhistle_found) == length_dogwhistles:
-                                dogwhistle_found.append(None)
-                            
-                            if len(batch) == 32:
-                                embeddings_out = model.embed(batch)
+                        documents.extend(batch)
 
-                                embeddings.extend(embeddings_out)
+                        batch = []
 
-                                documents.extend(batch)
+                    if len(documents) % 1_024_000 == 0 and len(documents) != 0:
+                        documents = np.array(documents)
 
-                                batch = []
+                        dogwhistles_found = {key: "||".join(val) for key, val in dogwhistles_found.items()}
 
-                            if len(documents) % 1_024_000 == 0 and len(documents) != 0:
-                                documents = np.array(documents)
-                                dogwhistle_found = np.array(dogwhistle_found)
-                                embeddings = np.array(embeddings)
+                        dogwhistles_found_values = [dogwhistles_found[x] for x in documents]
 
-                                out = os.path.join(output_folder, str(batch_id))
+                        dogwhistle_found = np.array(dogwhistles_found_values)
 
-                                if not os.path.exists(out):
-                                    os.makedirs(out, exist_ok=True)
+                        embeddings = np.array(embeddings)
 
-                                np.savez(os.path.join(output_folder, str(batch_id), f"data.npz"), documents=documents, dogwhistles=dogwhistle_found, embeddings=embeddings)
+                        out = os.path.join(output_folder, str(batch_id))
 
-                                batch_id += 1
+                        if not os.path.exists(out):
+                            os.makedirs(out, exist_ok=True)
 
-                                documents = []
-                                dogwhistle_found = []
-                                embeddings = []
+                        np.savez(os.path.join(output_folder, str(batch_id), f"data.npz"), documents=documents, dogwhistles=dogwhistle_found, embeddings=embeddings)
 
-                                batch = []
+                        batch_id += 1
 
-                except EOFError:
-                    print(f"{tweet_file} was not downloaded properly")
-                
-                embeddings_batch = model.embed(batch)
+                        documents = []
+                        dogwhistle_found = defaultdict(list)
+                        embeddings = []
 
-                embeddings.extend(embeddings_batch)
+                        batch = []
 
-                out = os.path.join(output_folder, str(batch_id))
+        except EOFError:
+            print(f"{tweet_file} was not downloaded properly")
 
-                if not os.path.exists(out):
-                    os.makedirs(out, exist_ok=True)
-                
-                documents = np.array(documents)
-                dogwhistle_found = np.array(dogwhistle_found)
-                embeddings = np.array(embeddings)
+        embeddings_batch = model.embed(batch)
 
-                np.savez(os.path.join(output_folder, str(batch_id), f"data.npz"), documents=documents, dogwhistles=dogwhistle_found, embeddings=embeddings)
+        embeddings.extend(embeddings_batch)
+
+        documents.extend(batch)
+
+        out = os.path.join(output_folder, str(batch_id))
+
+        if not os.path.exists(out):
+            os.makedirs(out, exist_ok=True)
+
+        documents = np.array(documents)
+
+        dogwhistles_found = {key: "||".join(val) for key, val in dogwhistles_found.items()}
+
+        dogwhistles_found_values = [dogwhistles_found[x] for x in documents]
+
+        dogwhistle_found = np.array(dogwhistles_found_values)
+
+        embeddings = np.array(embeddings)
+
+        np.savez(os.path.join(output_folder, str(batch_id), f"data.npz"), documents=documents, dogwhistles=dogwhistle_found, embeddings=embeddings)
 
                         
 
