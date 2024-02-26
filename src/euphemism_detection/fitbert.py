@@ -20,7 +20,7 @@ class FitBert:
         model_name="bert-large-uncased",
         mask_token="***mask***",
         disable_gpu=False,
-        batch_size = 16
+        batch_size = 2
     ):
         self.mask_token = mask_token
         self.batch_size = batch_size
@@ -45,23 +45,14 @@ class FitBert:
         return masked_ids
     
     def rank_multi(self, masked_sent: str, options: List[str]):
-
-        print("masked sentences")
-
-        print(len(options))
-
-        print(len(masked_sent))
-
         masked_sentences = [masked_sent.replace(self.mask_token, x) for x in options]
-
-        print(len(masked_sentences))
 
         all_probs = []
 
         for batch in tqdm(chunked(masked_sentences, self.batch_size)):
             print("tokenizing sentences")
 
-            tokens_batch = [self.tokenizer.tokenize(x) for x in batch]
+            tokens_batch = [self.tokenizer.tokenize(x)[:510] for x in batch]
             
             max_length = len(max(tokens_batch, key=lambda x: len(x)))
 
