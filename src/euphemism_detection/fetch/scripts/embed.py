@@ -1,9 +1,5 @@
 import argparse
 
-import csv
-
-from collections import defaultdict
-
 import gzip
 
 import os
@@ -12,7 +8,7 @@ import json
 
 import re
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple
 
 import zlib
 
@@ -22,14 +18,12 @@ import pandas as pd
 
 import hyperscan
 
-from more_itertools import chunked
-
 from tqdm import tqdm
 
 from src.euphemism_detection.fetch.embedding.sentencetransformer import SentenceTransformerEmbedder
 
 class Context:
-    def __init__(self, id_lookup: Tuple[str, int, int], tweet: str, twitter_file: str, results: Dict[str, List[str]]) -> None:
+    def __init__(self, id_lookup: Tuple[str, int, int], tweet: str, twitter_file: str, results: List[str]) -> None:
         self.id_lookup = id_lookup
         self.tweet = tweet
         self.twitter_file = twitter_file
@@ -39,7 +33,7 @@ def on_match(id: int, start: int, end: int, flags: int, context: Context) -> Non
 
     matched_item = context.id_lookup[id][0].decode()
 
-    context.results[context.tweet].append(matched_item)
+    context.results.append(matched_item)
 
 def main(args): 
     input_files = args.input_files
@@ -86,7 +80,7 @@ def main(args):
 
         embeddings = []
 
-        dogwhistles_found = defaultdict(list)
+        dogwhistles_found = []
 
         try:
             while True:
@@ -126,7 +120,11 @@ def main(args):
 
                         batch.append(tweet_text)
 
-                        db.scan(tweet_text.encode("utf-8"), match_event_handler=on_match, context = Context(patterns, tweet_text, tweet_file, dogwhistles_found))
+                        dogwhistles_for_word = []
+
+                        db.scan(tweet_text.encode("utf-8"), match_event_handler=on_match, context = Context(patterns, tweet_text, tweet_file, dogwhistles_for_word))
+
+                        dogwhistles_found.append(dogwhistles_for_word)
 
                     if len(batch) == 32:
                         embeddings_out = model.embed(batch)
@@ -140,11 +138,9 @@ def main(args):
                     if len(documents) % 1_024_000 == 0 and len(documents) != 0:
                         documents = np.array(documents)
 
-                        dogwhistles_found = {key: "||".join(val) for key, val in dogwhistles_found.items()}
+                        dogwhistles_found = ["||".join(x) for x in dogwhistles_found]
 
-                        dogwhistles_found_values = [dogwhistles_found[x] for x in documents]
-
-                        dogwhistle_found = np.array(dogwhistles_found_values)
+                        dogwhistles_found = np.array(dogwhistles_found)
 
                         embeddings = np.array(embeddings)
 
@@ -153,12 +149,12 @@ def main(args):
                         if not os.path.exists(out):
                             os.makedirs(out, exist_ok=True)
 
-                        np.savez(os.path.join(output_folder, str(batch_id), f"data.npz"), documents=documents, dogwhistles=dogwhistle_found, embeddings=embeddings)
+                        np.savez(os.path.join(output_folder, str(batch_id), f"data.npz"), documents=documents, dogwhistles=dogwhistles_found, embeddings=embeddings)
 
                         batch_id += 1
 
                         documents = []
-                        dogwhistle_found = defaultdict(list)
+                        dogwhistles_found = []
                         embeddings = []
 
                         batch = []
@@ -166,28 +162,26 @@ def main(args):
         except EOFError:
             print(f"{tweet_file} was not downloaded properly")
 
-        embeddings_batch = model.embed(batch)
+    embeddings_batch = model.embed(batch)
 
-        embeddings.extend(embeddings_batch)
+    embeddings.extend(embeddings_batch)
 
-        documents.extend(batch)
+    documents.extend(batch)
 
-        out = os.path.join(output_folder, str(batch_id))
+    out = os.path.join(output_folder, str(batch_id))
 
-        if not os.path.exists(out):
-            os.makedirs(out, exist_ok=True)
+    if not os.path.exists(out):
+        os.makedirs(out, exist_ok=True)
 
-        documents = np.array(documents)
+    documents = np.array(documents)
 
-        dogwhistles_found = {key: "||".join(val) for key, val in dogwhistles_found.items()}
+    dogwhistles_found = ["||".join(x) for x in dogwhistles_found]
 
-        dogwhistles_found_values = [dogwhistles_found[x] for x in documents]
+    dogwhistles_found = np.array(dogwhistles_found)
 
-        dogwhistle_found = np.array(dogwhistles_found_values)
+    embeddings = np.array(embeddings)
 
-        embeddings = np.array(embeddings)
-
-        np.savez(os.path.join(output_folder, str(batch_id), f"data.npz"), documents=documents, dogwhistles=dogwhistle_found, embeddings=embeddings)
+    np.savez(os.path.join(output_folder, str(batch_id), f"data.npz"), documents=documents, dogwhistles=dogwhistles_found, embeddings=embeddings)
 
                         
 
