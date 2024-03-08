@@ -2,6 +2,8 @@ import os
 
 from typing import List, Tuple
 
+from more_itertools import chunked
+
 from milvus import default_server
 
 from pymilvus import (
@@ -12,6 +14,19 @@ from pymilvus import (
 )
 
 import numpy as np
+
+
+from tqdm import tqdm
+
+def group_list(documents, embeddings, dogwhistles, group_size):
+    """
+    :param l:           list
+    :param group_size:  size of each group
+    :return:            Yields successive group-sized lists from l.
+    """
+    for i in range(0, len(documents), group_size):
+        yield documents[i:i+group_size], embeddings[i:i+group_size], dogwhistles[i:i+group_size]
+
 
 class MilvusDB:
 
@@ -33,14 +48,14 @@ class MilvusDB:
         post = FieldSchema(
             name="post",
             dtype=DataType.VARCHAR,
-            max_length=450,
+            max_length=4000,
             default_value="Unknown"
         )
 
         dogwhistle = FieldSchema(
             name="dogwhistle",
             dtype=DataType.VARCHAR,
-            max_length=70,
+            max_length=150,
         )
 
         embedding = FieldSchema(
@@ -60,28 +75,35 @@ class MilvusDB:
         
         self.dim = dim
 
-        self.files = ["documents.npy", "dogwhistles.npy", "book_intro.npy", "embeddings.npy"]
+        self.files = ["documents", "dogwhistles", "embeddings"]
 
         self.index_params = {
             "metric_type":"IP",
-            "index_type":"DISKANN",
+            "index_type":"FLAT",
         }
     
     def load_data(self, input_folder: str):
 
-        batches = [os.path.join(input_folder, x) for x in os.path.listdir(input_folder)]
+        files_to_load = []
 
-        task_ids = []
-
-        for batch in batches:
-            task_id = utility.do_bulk_insert(
-                collection_name=self.collection_name,
-                files=[os.path.join(batch, x) for x in self.files]
-            )
-
-            task_ids.append(task_id)
+        for path, subdirs, files in os.walk(input_folder):
+            for name in files:
+                file_name = os.path.join(path, name)
+                if "data.npz" in file_name:
+                    files_to_load.append(file_name)
         
-        utility.wait_for_index_building_complete(self.collection_name)
+        for file_to_load in tqdm(files_to_load):
+
+            data = np.load(file_to_load, allow_pickle=True)
+    
+            documents = data["documents"]
+    
+            embeddings = data["embeddings"]
+    
+            dogwhistles = data["dogwhistles"]
+        
+            for document_batch, embedding_batch, dogwhistle_batch in tqdm(group_list(documents, embeddings, dogwhistles, 1024)):
+                mr = self.post_lookup.insert([document_batch, dogwhistle_batch, embedding_batch])
     
     def create_index(self):
         self.post_lookup.create_index(
@@ -89,8 +111,6 @@ class MilvusDB:
             index_params=self.index_params
         )
 
-        utility.index_building_progress(self.collection_name)
-        
 
     def get_top_k_documents(self, documents_not_to_include: List[int], centroid: List[float], top_k: int) -> List[str]:
         
@@ -108,10 +128,13 @@ class MilvusDB:
     
     def calculate_seed_word_centroid(self, seed_word: str) -> Tuple[np.ndarray, np.ndarray]:
         res = self.post_lookup.query(
-            expr = f"dogwhistle == {seed_word}",
+            expr = f'dogwhistle like "{seed_word}%"',
             output_fields = ["tweet_id", "embeddings"],
         )
+        
+        tweet_ids = [x["tweet_id"] for x in res]
+        
+        embeddings = [x["embeddings"] for x in res]
 
-        return res["tweet_id"], np.array(res["embeddings"]).mean(axis=1)
-    
+        return tweet_ids, np.array(embeddings).mean(axis=0)
     
