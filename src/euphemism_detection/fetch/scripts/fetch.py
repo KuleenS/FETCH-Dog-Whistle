@@ -11,7 +11,7 @@ def main(args):
 
     collection_name = os.path.basename(args.embeddings_store)
 
-    db = MilvusDB(collection_name, 768)
+    db = MilvusDB(collection_name, 384)
 
     db.load_data(args.embeddings_store)
 
