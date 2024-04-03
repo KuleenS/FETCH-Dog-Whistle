@@ -12,6 +12,8 @@ class YAKEFilter(ABC):
 
     def get_most_important_ngrams(self, corpus: List[str], top_k: int):
 
-        keywords = self.kw_extractor.extract_keywords(corpus)
+        keywords = self.kw_extractor.extract_keywords("\n".join(corpus))
+        
+        keywords = sorted(keywords, key=lambda x: x[1], reverse=True)
 
         return keywords[:top_k]

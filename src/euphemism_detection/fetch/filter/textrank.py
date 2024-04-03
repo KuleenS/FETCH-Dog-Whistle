@@ -16,7 +16,7 @@ class TextRankFilter(ABC):
 
     def get_most_important_ngrams(self, corpus: List[str], top_k: int):
 
-        doc = self.nlp(corpus)
+        doc = self.nlp("\n".join(corpus))
 
         phrases = [x.text for x in list(doc._.phrases)][:top_k]
 

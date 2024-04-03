@@ -12,7 +12,7 @@ class RAKEFilter(ABC):
 
     def get_most_important_ngrams(self, corpus: List[str], top_k: int):
 
-        self.rake.extract_keywords_from_text(corpus)
+        self.rake.extract_keywords_from_sentences(corpus)
 
         phrases = self.rake.get_ranked_phrases()
 
