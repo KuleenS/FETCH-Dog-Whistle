@@ -36,6 +36,8 @@ def main(args):
 
     top_words = euphemism_detector.run()
 
+    print(len(set(top_words)))
+
     metrics = Metrics(os.path.join(args.dogwhistle_file_path, "glossary.tsv"))
 
     precision = metrics.measure_precision(top_words, extrapolating_dogwhistles_surface_forms)
