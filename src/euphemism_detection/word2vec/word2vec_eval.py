@@ -29,9 +29,11 @@ def main(args):
 
         a,b = x
 
-        found_at_stage = [x.lower() for x in b["term"].tolist()]
+        found_at_stage = [x.lower().replace("_", "") for x in b["term"].tolist()]
 
         total_found += found_at_stage
+
+        print(len(set(total_found)))
 
         print(metrics.measure_precision(total_found, extrapolating_dogwhistles), metrics.measure_recall(total_found, extrapolating_dogwhistles), metrics.measure_possible_recall(total_found, extrapolating_dogwhistles, args.ngrams_possible))
 
