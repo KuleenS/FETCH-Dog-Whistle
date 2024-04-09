@@ -16,4 +16,4 @@ class YAKEFilter(ABC):
         
         keywords = sorted(keywords, key=lambda x: x[1], reverse=True)
 
-        return keywords[:top_k]
+        return [x[0] for x in keywords]
