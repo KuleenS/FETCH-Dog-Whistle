@@ -2,7 +2,7 @@ import os
 
 from typing import Iterable, List, Dict, Any
 
-import openai
+from openai import OpenAI
 
 from tqdm import tqdm
 
@@ -18,9 +18,18 @@ class DogWhistleOfThought:
         :type max_tokens: int, optional
         """
 
-        super().__init__(model_name, temperature, max_tokens)
+        self.model_name = model_name
 
-        openai.api_key = os.environ["OPENAI_API_KEY"]
+        self.temperature = temperature
+
+        self.max_tokens = max_tokens
+
+        self.client = OpenAI(
+            # This is the default and can be omitted
+            api_key=os.environ.get("OPENAI_API_KEY"),
+        )
+
+
 
     def get_response(self, prompt: str) -> Dict[str, Any]:
         """Send request to ChatGPT API with prompt
@@ -34,24 +43,14 @@ class DogWhistleOfThought:
             {"role": "user", "content": prompt},
         ]
 
-        response = openai.ChatCompletion.create(
+        response = self.client.chat.completions.create(
             model=self.model_name,
             messages=messages,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         )
+        
         return response
-
-    def format_response(self, response: Dict[str, Any]) -> str:
-        """Clean up response from chatGPT API and return generated string
-
-        :param response: response from chatGPT API
-        :type response: Dict[str, Any]
-        :return: generated string
-        :rtype: str
-        """
-        text = response["message"]["content"].replace("\n", " ").strip()
-        return text
 
     def generate_from_prompts(self, examples: Iterable[str]) -> List[str]:
         """Send all examples to chatGPT and get its responses
@@ -71,9 +70,7 @@ class DogWhistleOfThought:
             # catch any errors that happen
             try:
                 response = self.get_response(example)
-                for line in response["choices"]:
-                    line = self.format_response(line)
-                    responses.append(line)
+                responses.append(response.choices[0].message.content.replace("\n", " ").strip())
             except Exception as e:
                 print(e)
                 responses.append("")
