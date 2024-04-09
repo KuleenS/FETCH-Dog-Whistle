@@ -4,41 +4,64 @@ import torch
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
+from tqdm import tqdm
+
 class PerplexityMetric:
     def __init__(self, model_name: str) -> None:
         self.model_name = model_name
 
-        self.tokenizer = AutoTokenizer(self.model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+        
+        self.tokenizer.model_max_length = 512
 
-        self.model = AutoModelForCausalLM(self.model_name, device="cuda")
+        self.model = AutoModelForCausalLM.from_pretrained(self.model_name, device_map ="cuda")
 
         self.loss_func = torch.nn.CrossEntropyLoss(reduction="none")
+    
+    def batch(self, iterable, n=1):
+        l = len(iterable)
+        for ndx in range(0, l, n):
+            yield iterable[ndx:min(ndx + n, l)]
 
     def get_scores(self, sentences: List[str]):
+        encodings = self.tokenizer(
+            sentences,
+            add_special_tokens=False,
+            padding='max_length',
+            truncation=True if self.tokenizer.model_max_length else False,
+            max_length=self.tokenizer.model_max_length,
+            return_tensors="pt",
+            return_attention_mask=True,
+        )
 
-        batched_sentences = batch(sentences, 32)
+        encoded_texts = encodings["input_ids"]
+        attn_masks = encodings["attention_mask"]
 
         self.model.eval()
 
-        total_perplexity = []
+        ppls = []
 
-        with torch.no_grad():
+        for start_index in tqdm(range(0, len(encoded_texts), 4)):
+            end_index = min(start_index + 4, len(encoded_texts))
+            encoded_batch = encoded_texts[start_index:end_index].to("cuda")
+            attn_mask = attn_masks[start_index:end_index].to("cuda")
 
-            for batch in batched_sentences:
-                tokenized_text = self.tokenizer(sentences, padding="max_length", return_tensors='pt').to("cuda")
+            labels = encoded_batch
 
-                output = self.model(**tokenized_text)
+            with torch.no_grad():
+                out_logits = self.model(encoded_batch, attention_mask=attn_mask).logits
 
-                logits = output.logits
-                
-                shift_logits = logits[:, :-1, : ].contiguous()
+            shift_logits = out_logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            shift_attention_mask_batch = attn_mask[..., 1:].contiguous()
 
-                shift_labels = batch["input_ids"][..., 1:].contiguous()
+            perplexity_batch = torch.exp(
+                (self.loss_func(shift_logits.transpose(1, 2), shift_labels) * shift_attention_mask_batch).sum(1)
+                / shift_attention_mask_batch.sum(1)
+            ).detach().cpu()
 
-                shift_attention_mask_batch = batch["attention_mask"][..., 1:].contiguous()
+            ppls.extend(perplexity_batch.tolist())
 
-                perplexity_batch = torch.exp(self.loss_func(shift_logits.transpose(1,2), shift_labels) * shift_attention_mask_batch).sum(1) / (shift_attention_mask_batch.sum(1))
-                                            
-                total_perplexity.extend(perplexity_batch.cpu().tolist())
-        
-        return total_perplexity
+        return ppls
