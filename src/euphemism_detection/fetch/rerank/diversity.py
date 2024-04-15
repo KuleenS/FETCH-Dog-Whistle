@@ -11,12 +11,7 @@ class DiversityReranker:
         self.clusters = clusters
 
     
-    def rerank(self, docu_embeds: List[Tuple[str, List[float]]], top_k: int):
-        
-        embeddings = [x[1] for x in docu_embeds]
-        
-        documents = [x[0] for x in docu_embeds]
-        
+    def rerank(self, documents: List[str], embeddings: List[List[float]], top_k: int):
         num_clusters = min(len(embeddings),self.clusters)
         
         kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(embeddings)
