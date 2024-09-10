@@ -2,73 +2,84 @@ import argparse
 
 import os
 
-from single_neural_euphemism import SingleNeuralEuphemismDetector
+import pandas as pd
 
-from utils import DogwhistleSplitter
+from src.euphemism_detection.neural.models.single_neural_euphemism import SingleNeuralEuphemismDetector
 
-from metrics import Metrics
+from src.euphemism_detection.metrics import Metrics
 
 def main(args):
-    # possible_dogwhistles = args.possible_dogwhistles
 
-    # dogwhistle_path = args.dogwhistle_file_path
+    tweet_files = args.tweet_files
+    sampled_file = args.sampled_file
+    reddit_file = args.reddit_file
 
-    # splitter = DogwhistleSplitter(dogwhistle_path, possible_dogwhistles)
-
-    # given_dogwhistles_surface_forms, extrapolating_dogwhistles_surface_forms = splitter.split()
-
-    with open(os.path.join(args.dogwhistle_path, "given_dogwhistles.csv"), "r") as f:
+    with open(os.path.join(args.dogwhistle_path, "given.dogwhistles"), "r") as f:
         given_dogwhistles_surface_forms = f.readlines()
     
-    with open(os.path.join(args.dogwhistle_path, "extrapolating_dogwhistles_surface_forms.csv"), "r") as f:
+    with open(os.path.join(args.dogwhistle_path, "extrapolating.dogwhistles"), "r") as f:
         extrapolating_dogwhistles_surface_forms = f.readlines()
-    
-    with open(os.path.join(args.data_path, "sampled_tweets.csv"), "r") as f:
-        tweet_files = f.readlines()
     
     given_dogwhistles_surface_forms = [x.strip().lower() for x in given_dogwhistles_surface_forms]
 
     extrapolating_dogwhistles_surface_forms = [x.strip().lower() for x in extrapolating_dogwhistles_surface_forms]
 
-    tweet_files = [x.strip().replace('"', "").replace("'", "").strip("][") for x in tweet_files][1:]
+    if tweet_files is not None:
+        euphemism_detector = SingleNeuralEuphemismDetector(given_dogwhistles_surface_forms, tweet_files, 25600, args.model_name, "raw")
+    elif sampled_file is not None:
+        with open(os.path.join(sampled_file), "r") as f:
+            tweet_files = f.readlines()
+        tweet_files = [x.strip().replace('"', "").replace("'", "").strip("][") for x in tweet_files][1:]
 
-    euphemism_detector = SingleNeuralEuphemismDetector(given_dogwhistles_surface_forms, tweet_files, args.threshold, args.model_name, True)
+        euphemism_detector = SingleNeuralEuphemismDetector(given_dogwhistles_surface_forms, tweet_files, 25600, args.model_name, "sampled")
+    
+    elif reddit_file is not None:
+        
+        df = pd.read_parquet(reddit_file)
+
+        data = list(df["content"])
+
+        euphemism_detector = SingleNeuralEuphemismDetector(given_dogwhistles_surface_forms, data, 25600, args.model_name, "txt")
+    else:
+        raise ValueError("Must specify input")
 
     top_words = euphemism_detector.run()
 
-    print(len(set(top_words)))
+    thresholds = [50,
+    100,
+    200,
+    400,
+    800,
+    1600,
+    3200,
+    6400,
+    12800,
+    25600]
 
-    metrics = Metrics(os.path.join(args.dogwhistle_file_path, "glossary.tsv"))
+    for threshold in thresholds:
+        top_words_at_t = top_words[:threshold]
 
-    precision = metrics.measure_precision(top_words, extrapolating_dogwhistles_surface_forms)
+        metrics = Metrics(args.dogwhistle_file)
 
-    recall = metrics.measure_recall(top_words, extrapolating_dogwhistles_surface_forms)
+        precision = metrics.measure_precision(top_words_at_t, extrapolating_dogwhistles_surface_forms)
 
-    possible_recall = metrics.measure_possible_recall(top_words, extrapolating_dogwhistles_surface_forms, 1)
+        recall = metrics.measure_recall(top_words_at_t, extrapolating_dogwhistles_surface_forms)
 
-    print(precision, recall, possible_recall)
+        possible_recall = metrics.measure_possible_recall(top_words_at_t, extrapolating_dogwhistles_surface_forms, 1)
 
-    # with open(os.path.join(args.output_path, "given_dogwhistles"), "w") as f:
-    #     f.write("\n".join(given_dogwhistles_surface_forms))
-    
-    # with open(os.path.join(args.output_path, "extrapolating_dogwhistles"), "w") as f:
-    #     f.write("\n".join(extrapolating_dogwhistles_surface_forms))
-    
-    with open(os.path.join(args.output_path, "top_words"), "w") as f:
-        f.write("\n".join(top_words))
-
-
+        print(threshold, precision, recall, possible_recall)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dogwhistle_file_path')
-    # parser.add_argument('--possible_dogwhistles')
+    parser.add_argument('--dogwhistle_file')
     parser.add_argument('--dogwhistle_path')
-    parser.add_argument('--data_path')
     parser.add_argument('--model_name')
-    # parser.add_argument('--tweet_files', nargs='+')
-    parser.add_argument('--output_path')
-    parser.add_argument('--threshold', type=int)
+
+    parser.add_argument('--tweet_files', nargs='+', required=False, default=None)
+    parser.add_argument('--reddit_file', required=False, default=None)
+    parser.add_argument('--sampled_file', required=False, default=None)
+
+
 
     args = parser.parse_args()
     main(args)

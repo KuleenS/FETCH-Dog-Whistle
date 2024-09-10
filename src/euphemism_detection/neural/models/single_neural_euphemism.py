@@ -24,7 +24,7 @@ nltk.download('stopwords')
 
 class SingleNeuralEuphemismDetector: 
 
-    def __init__(self, given_keywords: List[str], data: List[str], thres : int, model_name: str, data_is_tweets: bool = False):
+    def __init__(self, given_keywords: List[str], data: List[str], thres : int, model_name: str, data_is_tweets: str):
         self.given_keywords = given_keywords
         self.data = data
         self.data_is_tweets = data_is_tweets
@@ -125,7 +125,7 @@ class SingleNeuralEuphemismDetector:
 
         MASK = ' [MASK] '
 
-        if not self.data_is_tweets:
+        if self.data_is_tweets == "raw":
 
             for i, tweet_file in tqdm(enumerate(files), desc="Twitter Files"):
 
@@ -180,6 +180,19 @@ class SingleNeuralEuphemismDetector:
                     print(f"{tweet_file} was not downloaded properly")
             
             print('[util.py] Generating top candidates...')
+        
+        elif self.data_is_tweets == "txt":
+            masked_sentence = []
+
+            for tweet_text in self.data:
+                temp = nltk.word_tokenize(tweet_text)
+                for target in input_keywords:
+                    if target not in temp:
+                        continue
+                    
+                    temp_index = temp.index(target)
+
+                    masked_sentence += [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
         else:
             masked_sentence = self.data
         
