@@ -12,7 +12,7 @@ from transformers import (
 from tqdm import tqdm
 
 
-class DogWhistleOfThoughtOffline:
+class OfflineLLM:
     def __init__(self, model_name: str, temperature: float = 1, max_tokens: int = 5):
         """HF offline model initializer
 
