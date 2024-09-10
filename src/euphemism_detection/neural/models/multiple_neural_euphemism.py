@@ -28,19 +28,18 @@ from tqdm import tqdm
 
 from nltk.corpus import stopwords
 
-from fitbert import FitBert
+from src.euphemism_detection.neural.fitbert import FitBert
 
 nltk.download('stopwords')
 
 class MultiNeuralEuphemismDetector: 
 
-    def __init__(self, given_keywords: List[str], data: List[str], phrase_candidates: List[str], word_2_vec: str, dataset_name: str, output_dir: str, model_name: str, thres: int, data_is_tweets: bool = False):
+    def __init__(self, given_keywords: List[str], data: List[str], phrase_candidates: List[str], word_2_vec: str, output_dir: str, model_name: str, thres: int, data_is_tweets: str):
         self.given_keywords = given_keywords
         self.data = data
         self.phrase_candidates = phrase_candidates
         self.output_dir = output_dir
         self.word_2_vec = word_2_vec
-        self.dataset_name = dataset_name
         self.data_is_tweets = data_is_tweets
         self.thres = thres
 
@@ -232,19 +231,19 @@ class MultiNeuralEuphemismDetector:
 
         phrase_cand, _ = self.rank_by_spanbert(phrase_cand, sentences, given_keywords, thres)
 
-        print("output cand", len(phrase_cand))
+        # print("output cand", len(phrase_cand))
         
-        return phrase_cand, []
+        # return phrase_cand, []
 
-    def euphemism_detection(self, given_keywords: List[str], files: List[str], skip: bool, multi: bool):
+    def euphemism_detection(self, input_keywords: List[str], files: List[str], skip: bool, multi: bool):
         MASK = ' [MASK] '
         masked_sentence = []
 
         N = 0
         K = 2000
 
-        if not self.data_is_tweets:
-       
+        if self.data_is_tweets == "raw":
+
             for i, tweet_file in tqdm(enumerate(files), desc="Twitter Files"):
 
                 tweets = gzip.open(tweet_file, "rt")
@@ -275,39 +274,54 @@ class MultiNeuralEuphemismDetector:
                                 except:
                                     print(tweet, " failed")
                                     tweet_text = ""
-                                
-                        temp = nltk.word_tokenize(tweet_text)
-                        for target in given_keywords:
-                            if target not in temp:
-                                continue
-                            temp_index = temp.index(target)
+                        
+                        if isinstance(tweet_text, str) and tweet_text is not None:
+                            print(tweet_text)
+                            print(type(tweet_text))
+                            temp = nltk.word_tokenize(tweet_text)
+                            for target in input_keywords:
+                                if target not in temp:
+                                    continue
+                                temp_index = temp.index(target)
 
-                            N += 1
+                                N += 1
 
-                            if len(masked_sentence) < K:
-                                masked_sentence += [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
-                            else:
-                                s = int(random.random() * N)
-                                if s < K:
-                                    masked_sentence[s] = [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
-
+                                if len(masked_sentence) < K:
+                                    masked_sentence += [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
+                                else:
+                                    s = int(random.random() * N)
+                                    if s < K:
+                                        masked_sentence[s] = [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
+                
                 except EOFError:
                     print(f"{tweet_file} was not downloaded properly")
             
+            print('[util.py] Generating top candidates...')
+        
+        elif self.data_is_tweets == "txt":
+            masked_sentence = []
+
+            for tweet_text in self.data:
+                temp = nltk.word_tokenize(tweet_text)
+                for target in input_keywords:
+                    if target not in temp:
+                        continue
+                    
+                    temp_index = temp.index(target)
+
+                    masked_sentence += [' '.join(temp[: temp_index]) + MASK + ' '.join(temp[temp_index + 1:])]
         else:
             masked_sentence = self.data
         
         if not multi:
-            top_words, top_words_tuple, _ = self.MLM(masked_sentence, given_keywords, thres=self.thres, filter_uninformative=0)
+            top_words, top_words_tuple, _ = self.MLM(masked_sentence, input_keywords, thres=self.thres, filter_uninformative=0)
         else:
-            ini_top_words, _, good_masked_sentences = self.MLM(masked_sentence, given_keywords, thres=self.thres, filter_uninformative=0)
-            top_words, top_words_tuple = self.multi_MLM(good_masked_sentences, given_keywords, ini_top_words, thres=self.thres)
+            ini_top_words, _, good_masked_sentences = self.MLM(masked_sentence, input_keywords, thres=self.thres, filter_uninformative=0)
+            top_words, top_words_tuple = self.multi_MLM(good_masked_sentences, input_keywords, ini_top_words, thres=self.thres)
 
         return top_words
     
     def run(self):
         input_keywords = [x.lower().strip() for x in self.given_keywords]
 
-        top_words = self.euphemism_detection(input_keywords, self.data, skip = True, multi = True)
-
-        return top_words
+        self.euphemism_detection(input_keywords, self.data, skip = True, multi = True)

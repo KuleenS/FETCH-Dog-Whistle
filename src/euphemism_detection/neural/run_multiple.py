@@ -8,55 +8,57 @@ import pandas as pd
 
 from tqdm import tqdm
 
-from multiple_neural_euphemism import MultiNeuralEuphemismDetector
+from src.euphemism_detection.neural.models.multiple_neural_euphemism import MultiNeuralEuphemismDetector
 
-from utils import DogwhistleSplitter
-
-from metrics import Metrics
-
+from src.euphemism_detection.metrics import Metrics
 
 def main(args):
-    # tweet_files = args.tweet_files
-
-    # possible_dogwhistles = args.possible_dogwhistles
-
-    # dogwhistle_path = args.dogwhistle_file_path
-
-    phrase_path = args.phrase_candidate_folder
+    phrase_path = args.phrase_candidate_file
 
     word2vec_path = args.word2vec_file
 
-    # splitter = DogwhistleSplitter(dogwhistle_path, possible_dogwhistles)
+    tweet_files = args.tweet_files
+    sampled_file = args.sampled_file
+    reddit_file = args.reddit_file
 
-    # given_dogwhistles_surface_forms, extrapolating_dogwhistles_surface_forms = splitter.split()
-
-    with open(os.path.join(args.dogwhistle_path, "given_dogwhistles.csv"), "r") as f:
+    with open(os.path.join(args.dogwhistle_path, "given.dogwhistles"), "r") as f:
         given_dogwhistles_surface_forms = f.readlines()
     
-    with open(os.path.join(args.dogwhistle_path, "extrapolating_dogwhistles_surface_forms.csv"), "r") as f:
+    with open(os.path.join(args.dogwhistle_path, "extrapolating.dogwhistles"), "r") as f:
         extrapolating_dogwhistles_surface_forms = f.readlines()
     
+    given_dogwhistles_surface_forms = [x.strip().lower() for x in given_dogwhistles_surface_forms]
+
     extrapolating_dogwhistles_surface_forms = [x.strip().lower() for x in extrapolating_dogwhistles_surface_forms]
 
-    given_dogwhistles_surface_forms = [x.strip().lower() for x in given_dogwhistles_surface_forms]
-    
-    with open(os.path.join(args.data_path, "sampled_tweets.csv"), "r") as f:
-        reader = csv.reader(f, delimiter="\t")
-        
-        tweet_files = [x[0] for x in reader]
-
-    tweet_files = [x.strip().replace('"', "").replace("'", "").strip("][") for x in tweet_files][1:]
-
-    with open(os.path.join(phrase_path, "AutoPhrase.txt"), "r") as f:
+    with open(phrase_path, "r") as f:
         phrases = f.readlines()
 
     phrases = [x.split("\t")[1].strip() for x in phrases]
 
-    euphemism_detector = MultiNeuralEuphemismDetector(given_dogwhistles_surface_forms, tweet_files, phrases, word2vec_path, args.data_name, args.output_path, args.model_name, args.threshold, True)
+    if tweet_files is not None:
+        euphemism_detector = MultiNeuralEuphemismDetector(given_dogwhistles_surface_forms, tweet_files, phrases, word2vec_path, args.output_path, args.model_name, 25600, "raw")
+
+    elif sampled_file is not None:
+        with open(sampled_file, "r") as f:
+            tweet_files = f.readlines()
+        tweet_files = [x.strip().replace('"', "").replace("'", "").strip("][") for x in tweet_files][1:]
+
+        euphemism_detector = MultiNeuralEuphemismDetector(given_dogwhistles_surface_forms, tweet_files, phrases, word2vec_path, args.output_path, args.model_name, 25600, "sampled")
+    
+    elif reddit_file is not None:
+        
+        df = pd.read_parquet(reddit_file)
+
+        data = list(df["content"])
+
+        euphemism_detector = MultiNeuralEuphemismDetector(given_dogwhistles_surface_forms, data, phrases, word2vec_path, args.output_path, args.model_name, 25600, "txt")
+    else:
+        raise ValueError("Must specify input")
 
     euphemism_detector.run()
 
-    metrics = Metrics(os.path.join(args.dogwhistle_file_path, "glossary.tsv"))
+    metrics = Metrics(args.dogwhistle_file)
 
     files = [os.path.join(args.output_path, x) for x in os.listdir(args.output_path)]
     
@@ -99,17 +101,19 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    # parser.add_argument('--dogwhistle_file_path')
-    # parser.add_argument('--possible_dogwhistles')
+    parser.add_argument('--dogwhistle_file')
     parser.add_argument('--dogwhistle_path')
-    parser.add_argument('--data_path')
-    parser.add_argument('--phrase_candidate_folder')
+
+    parser.add_argument('--phrase_candidate_file')
     parser.add_argument('--word2vec_file')
-    # parser.add_argument('--tweet_files', nargs='+')
-    parser.add_argument('--output_path')
     parser.add_argument('--model_name')
-    parser.add_argument('--data_name')
-    parser.add_argument('--threshold', type=int)
+
+    parser.add_argument('--tweet_files', nargs='+', required=False, default=None)
+    parser.add_argument('--reddit_file', required=False, default=None)
+    parser.add_argument('--sampled_file', required=False, default=None)
+
+    parser.add_argument('--output_path')
+
 
 
     args = parser.parse_args()
