@@ -6,7 +6,7 @@ from openai import OpenAI
 
 from tqdm import tqdm
 
-class DogWhistleOfThought:
+class ChatGPTLLM:
     def __init__(self, model_name: str, temperature: float = 1, max_tokens: int = 5):
         """ChatGPT initializer
 
@@ -28,8 +28,6 @@ class DogWhistleOfThought:
             # This is the default and can be omitted
             api_key=os.environ.get("OPENAI_API_KEY"),
         )
-
-
 
     def get_response(self, prompt: str) -> Dict[str, Any]:
         """Send request to ChatGPT API with prompt
