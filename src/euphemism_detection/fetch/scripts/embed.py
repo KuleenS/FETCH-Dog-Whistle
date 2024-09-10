@@ -6,34 +6,20 @@ import os
 
 import json
 
-import re
-
-from typing import List, Tuple
-
 import zlib
 
 import numpy as np
 
 import pandas as pd
 
-import hyperscan
+try:
+    import re2 as re
+except ImportError:
+    import re
 
 from tqdm import tqdm
 
 from src.euphemism_detection.fetch.embedding.sentencetransformer import SentenceTransformerEmbedder
-
-class Context:
-    def __init__(self, id_lookup: Tuple[str, int, int], tweet: str, twitter_file: str, results: List[str]) -> None:
-        self.id_lookup = id_lookup
-        self.tweet = tweet
-        self.twitter_file = twitter_file
-        self.results = results
-
-def on_match(id: int, start: int, end: int, flags: int, context: Context) -> None:
-
-    matched_item = context.id_lookup[id][0].decode()
-
-    context.results.append(matched_item)
 
 def main(args): 
     input_files = args.input_files
@@ -50,20 +36,9 @@ def main(args):
 
     dogwhistle_set = list(set([x.lower().strip() for x in dogwhistle_set]))
 
-    dogwhistle_set = [re.escape(x).encode("utf-8") for x in dogwhistle_set]
-
-    db = hyperscan.Database()
-
-    patterns = tuple(zip(dogwhistle_set, range(len(dogwhistle_set)), [hyperscan.HS_FLAG_CASELESS | hyperscan.HS_FLAG_SINGLEMATCH]*len(dogwhistle_set)))
-
-    expressions, ids, flags = zip(*patterns)
-
-    db.compile(
-        expressions=expressions, ids=ids, elements=len(patterns), flags=flags
-    )
+    pattern = re.compile("|".join([re.escape(x) for x in dogwhistle_set]))
 
     batch_id = 0
-
 
     for i, tweet_file in tqdm(enumerate(input_files), desc="Twitter Files"):
 
@@ -120,11 +95,9 @@ def main(args):
 
                         batch.append(tweet_text)
 
-                        dogwhistles_for_word = []
+                        matches = re.findall(pattern, tweet_text)
 
-                        db.scan(tweet_text.encode("utf-8"), match_event_handler=on_match, context = Context(patterns, tweet_text, tweet_file, dogwhistles_for_word))
-
-                        dogwhistles_found.append(dogwhistles_for_word)
+                        dogwhistles_found.append(matches)
 
                     if len(batch) == 32:
                         embeddings_out = model.embed(batch)
