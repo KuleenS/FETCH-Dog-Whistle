@@ -17,7 +17,6 @@ class FitBert:
         self,
         model=None,
         tokenizer=None,
-        model_name="bert-large-uncased",
         mask_token="***mask***",
         disable_gpu=False,
         batch_size = 2
@@ -52,7 +51,12 @@ class FitBert:
         for batch in tqdm(chunked(masked_sentences, self.batch_size)):
             print("tokenizing sentences")
 
-            tokens_batch = [self.tokenizer.tokenize(x)[:510] for x in batch]
+            if "bernice" in self.bert.config._name_or_path:
+                tokens_batch = [self.tokenizer.tokenize(x)[:128] for x in batch]
+            elif "bertweet" in self.bert.config._name_or_path:
+                tokens_batch = [self.tokenizer.tokenize(x)[:128] for x in batch]
+            elif "spanbert"in self.bert.config._name_or_path:
+                tokens_batch = [self.tokenizer.tokenize(x)[:510] for x in batch]
             
             max_length = len(max(tokens_batch, key=lambda x: len(x)))
 
