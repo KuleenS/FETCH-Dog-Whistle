@@ -1,5 +1,7 @@
 import os
 
+import random
+
 from typing import List, Tuple
 
 from more_itertools import chunked
@@ -125,16 +127,29 @@ class MilvusDB:
         res = self.post_lookup.search(**search_param)
 
         return res
+
+    def sample_negative_posts(self, documents_not_to_include: List[int], number_of_samples: int) -> List[str]:
+        res = self.post_lookup.query(
+            expr = f"not (tweet_id in {documents_not_to_include})",
+            output_fields = ["post"],
+        )
+
+        posts = [x["post"] for x in res]
+
+        return random.sample(posts, number_of_samples)
+
     
-    def calculate_seed_word_centroid(self, seed_word: str) -> Tuple[np.ndarray, np.ndarray]:
+    def calculate_seed_word_centroid(self, seed_word: str) -> Tuple[List[int], List[List[float]], List[str]]:
         res = self.post_lookup.query(
             expr = f'dogwhistle like "{seed_word}%"',
-            output_fields = ["tweet_id", "embeddings"],
+            output_fields = ["tweet_id", "embeddings", "post"],
         )
         
         tweet_ids = [x["tweet_id"] for x in res]
         
         embeddings = [x["embeddings"] for x in res]
 
-        return tweet_ids, np.array(embeddings).mean(axis=0)
+        posts = [x["post"] for x in res]
+
+        return tweet_ids, embeddings, posts
     
