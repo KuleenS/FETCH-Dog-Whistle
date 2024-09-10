@@ -8,8 +8,42 @@ import pandas as pd
 
 from sklearn.model_selection import train_test_split
 
-
 class DogwhistleSplitter:
+    def __init__(self, file, **kwargs):
+        if file.endswith(".parquet"):
+            self.splitter = DogwhistleSplitterReddit(file)
+        elif "seen_dogwhistles" in kwargs:
+            self.splitter = DogwhistleSplitterOther(file, kwargs["seen_dogwhistles"])
+        else:
+            raise ValueError("Either provide a parquet if you're splitting the reddit data or provide a pickle for the seen dogwhistles")
+    
+    def split(self):
+        return self.splitter.split()
+
+
+class DogwhistleSplitterReddit:
+    def __init__(self, reddit_file: str) -> None:
+
+        self.reddit_file = reddit_file
+
+        self.data = pd.read_parquet(reddit_file)
+
+        self.dogwhistle_data = self.data[["dog_whistle", "dog_whistle_root"]].groupby("dog_whistle_root").agg(set).reset_index()
+
+        self.dogwhistle_data["ngrams"] = [len(word_tokenize(x)) for x in self.dogwhistle_data["dog_whistle_root"]]
+
+        self.dogwhistle_data["effective_ngrams"] = [x if (x < 4) else 4 for x in self.dogwhistle_data["ngrams"]]
+
+    def split(self):
+        extrapolating_dogwhistles, given_dogwhistles = train_test_split(self.dogwhistle_data, test_size=0.2, stratify = self.dogwhistle_data["effective_ngrams"])
+
+        extrapolating_dogwhistles_surface_forms = sum([list(x) for x in extrapolating_dogwhistles["dog_whistle"]], [])
+
+        given_dogwhistles_surface_forms = sum([list(x) for x in given_dogwhistles["dog_whistle"]], [])
+
+        return given_dogwhistles_surface_forms, extrapolating_dogwhistles_surface_forms
+
+class DogwhistleSplitterOther:
 
     def __init__(self, glossary_path: str, seen_dogwhistles: str) -> None:
         df = pd.read_csv(glossary_path, sep="\t")
