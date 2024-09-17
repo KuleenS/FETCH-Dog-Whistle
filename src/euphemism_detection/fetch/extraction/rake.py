@@ -4,9 +4,12 @@ from typing import List
 
 from rake_nltk import Rake
 
-class RAKEFilter(ABC):
+from src.euphemism_detection.fetch.extraction.base_filter import BaseFilter
+
+class RAKEFilter(BaseFilter):
     
     def __init__(self, ngram_range: tuple[int, int]):
+        super().__init__()
 
         self.rake = Rake(min_length=ngram_range[0], max_length=ngram_range[1])
 

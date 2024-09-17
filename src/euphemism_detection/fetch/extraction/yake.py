@@ -4,9 +4,12 @@ from typing import List
 
 import yake
 
-class YAKEFilter(ABC):
+from src.euphemism_detection.fetch.extraction.base_filter import BaseFilter
+
+class YAKEFilter(BaseFilter):
     
     def __init__(self, ngram_range: tuple[int, int]):
+        super().__init__()
 
         self.kw_extractor = yake.KeywordExtractor(n=ngram_range[1])
 

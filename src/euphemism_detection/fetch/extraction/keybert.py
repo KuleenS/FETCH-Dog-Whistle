@@ -4,9 +4,12 @@ from typing import List
 
 from keybert import KeyBERT
 
-class KeyBERTFilter(ABC):
+from src.euphemism_detection.fetch.extraction.base_filter import BaseFilter
+
+class KeyBERTFilter(BaseFilter):
     
     def __init__(self, ngram_range: tuple[int, int]):
+        super().__init__()
 
         self.kw_model = KeyBERT()
 
