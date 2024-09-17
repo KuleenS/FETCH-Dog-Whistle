@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 
 class GeminiLLM:
-    def __init__(self, model_name: str, temperature: float = 1, max_tokens: int = 5):
+    def __init__(self, model_name: str, temperature: float = 1, max_tokens: int = 1):
         """Gemini model initializer
 
         :param model_name: name of model
@@ -39,7 +39,7 @@ class GeminiLLM:
                 temperature=self.temperature,
             ))
 
-        return response.text
+        return response.text.lower().strip()
 
     def generate_from_prompts(self, examples: Iterable[str]) -> List[str]:
         """Send all examples to offline HF model and get its responses

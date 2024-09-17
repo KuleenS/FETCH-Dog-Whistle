@@ -7,7 +7,7 @@ from openai import OpenAI
 from tqdm import tqdm
 
 class ChatGPTLLM:
-    def __init__(self, model_name: str, temperature: float = 1, max_tokens: int = 5):
+    def __init__(self, model_name: str, temperature: float = 1, max_tokens: int = 1):
         """ChatGPT initializer
 
         :param model_name: name of model
@@ -68,7 +68,7 @@ class ChatGPTLLM:
             # catch any errors that happen
             try:
                 response = self.get_response(example)
-                responses.append(response.choices[0].message.content.replace("\n", " ").strip())
+                responses.append(response.choices[0].message.content.replace("\n", " ").strip().lower())
             except Exception as e:
                 print(e)
                 responses.append("")
