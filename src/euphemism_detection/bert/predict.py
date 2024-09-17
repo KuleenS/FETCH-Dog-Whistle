@@ -4,7 +4,7 @@ from transformers import pipeline
 
 class PredictBERT:
 
-    def __init__(self, model_folder: str):
+    def __init__(self, model_folder: str, model_name: str = None):
 
         self.model_folder = model_folder
 
@@ -21,9 +21,9 @@ class PredictBERT:
         if model_folder in self.max_length:
             max_length = self.max_length[model_folder]
         
-        else:
-            max_length = 510
-
+        elif model_name == "jhu-clsp/bernice" or model_name == "vinai/bertweet-base":
+            max_length = 130
+        
         if self.model_folder== "tomh/toxigen_hatebert":
             self.classifier = pipeline("text-classification", model=self.model_folder, tokenizer="GroNLP/hateBERT", device="cuda:0", max_length = max_length, truncation=True)
         elif self.model_folder in ["adediu25/subtle-toxicgenconprompt-all-no-lora", "adediu25/implicit-toxicgenconprompt-all-no-lora"]:
