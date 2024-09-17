@@ -64,14 +64,14 @@ def main(args):
     
     with open(os.path.join(args.dogwhistle_path, "extrapolating.dogwhistles"), "r") as f:
         extrapolating_dogwhistles_surface_forms = [x.lower().strip() for x in f.readlines()]
+    
+    db = MilvusDB(args.collection_name, 384)
+
+    db.load_data(args.embedding_folder)
+
+    db.create_index()
 
     if not os.path.exists(os.path.join(args.output_folder, f"lookup_saved_{args.collection_name}.pickle")):
-        db = MilvusDB(args.collection_name, 384)
-
-        db.load_data(args.embedding_folder)
-
-        db.create_index()
-
         centroid = []
 
         total_tweet_ids = []
@@ -131,8 +131,6 @@ def main(args):
 
             predictions = model.generate_from_prompts([prompt.format(sentence = x) for x in posts])
 
-            print(predictions[:10])
-
             filtered_posts = [post for prediction, post in zip(predictions, posts) if any(x in prediction for x in ["yes", "y"])]
 
             if len(filtered_posts) != 0:
@@ -142,6 +140,7 @@ def main(args):
                 print("FAILURE NO POSTS")
 
     elif args.filtering_method == "bert-train":
+        
         for model_name in args.models:
             model = TrainBERT(model_name, args.lr, args.weight_decay, args.batch_size, args.epochs, args.output_folder)
 
@@ -153,7 +152,7 @@ def main(args):
 
             model.train(X,y)
 
-            model = PredictBERT(args.output_folder)
+            model = PredictBERT(os.path.join(args.output_folder, model_name.replace("/", "-")), model_name)
 
             predictions = model.prediction(posts)
 
