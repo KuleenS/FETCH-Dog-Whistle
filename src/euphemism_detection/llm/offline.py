@@ -26,6 +26,11 @@ class OfflineLLM:
             "text-generation", model=self.model_name, device_map="auto", batch_size = 4
         )
 
+        self.pipeline_model.tokenizer.pad_token_id = self.pipeline_model.model.config.eos_token_id[0]
+
+        self.pipeline_model.tokenizer.padding_side = "left"
+
+
     def get_response(self, prompts: Iterable[str]) -> Dict[str, Any]:
         """ "Get response from HF model with prompt batch
 
