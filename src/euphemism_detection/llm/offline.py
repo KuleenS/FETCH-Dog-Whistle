@@ -26,21 +26,13 @@ class OfflineLLM:
             "text-generation", model=self.model_name, device_map="auto", batch_size = 4
         )
 
-        self.pipeline_model.tokenizer.pad_token_id = self.pipeline_model.model.config.eos_token_id[0]
+        if isinstance(self.pipeline_model.model.config.eos_token_id, list):
+            self.pipeline_model.tokenizer.pad_token_id = self.pipeline_model.model.config.eos_token_id[0]
+        else:
+            self.pipeline_model.tokenizer.pad_token_id = self.pipeline_model.model.config.eos_token_id
 
         self.pipeline_model.tokenizer.padding_side = "left"
 
-
-    def get_response(self, prompts: Iterable[str]) -> Dict[str, Any]:
-        """ "Get response from HF model with prompt batch
-
-        :param prompt: prompt to send to model
-        :type prompt: Iterable[str]
-        :return: response of API endpoint
-        :rtype: Dict[str, Any]
-        """
-        
-        return [x["generated_text"] for x in self.pipeline_model(prompts, max_new_tokens=self.max_tokens)]
 
     def format_response(self, response: str, prompt: str) -> str:
         """Clean up response from Offline HF model and return generated string
@@ -62,11 +54,14 @@ class OfflineLLM:
         :rtype: List[str]
         """
         with torch.inference_mode():
-            responses = [x["generated_text"] for x in self.pipeline_model(examples, max_new_tokens=self.max_tokens)]
+            responses = self.pipeline_model(examples, max_new_tokens=self.max_tokens)
+        
+        responses = [x[0]["generated_text"] for x in responses]
 
         responses = [self.format_response(x, prompt) for x, prompt in zip(responses, examples)]
 
-        del self.model
+        del self.pipeline_model
+
         torch.cuda.empty_cache()
 
         return responses
