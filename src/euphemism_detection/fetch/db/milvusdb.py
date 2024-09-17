@@ -47,17 +47,25 @@ class MilvusDB:
             auto_id = True,
         )
 
-        post = FieldSchema(
-            name="post",
-            dtype=DataType.VARCHAR,
-            max_length=4000,
-            default_value="Unknown"
-        )
-
+        if collection_name == "reddit":
+            post = FieldSchema(
+                name="post",
+                dtype=DataType.VARCHAR,
+                max_length=19000,
+                default_value="Unknown"
+            )
+        else:
+            post = FieldSchema(
+                name="post",
+                dtype=DataType.VARCHAR,
+                max_length=4000,
+                default_value="Unknown"
+            )
+        
         dogwhistle = FieldSchema(
             name="dogwhistle",
             dtype=DataType.VARCHAR,
-            max_length=150,
+            max_length=300,
         )
 
         embedding = FieldSchema(
@@ -70,6 +78,8 @@ class MilvusDB:
             fields=[tweet_id, post, dogwhistle, embedding],
             description="Semantic Tweet Lookup",
         )
+
+        utility.drop_collection(collection_name)
 
         self.post_lookup = Collection(collection_name, schema, using='default')
 
@@ -94,16 +104,17 @@ class MilvusDB:
                 if "data.npz" in file_name:
                     files_to_load.append(file_name)
         
-        for file_to_load in tqdm(files_to_load):
-
+        for file_to_load in files_to_load:
             data = np.load(file_to_load, allow_pickle=True)
-    
+            
             documents = data["documents"]
-    
+            
             embeddings = data["embeddings"]
-    
+            
             dogwhistles = data["dogwhistles"]
-        
+            
+            dogwhistles = np.char.replace(dogwhistles, '\\', '')
+            
             for document_batch, embedding_batch, dogwhistle_batch in tqdm(group_list(documents, embeddings, dogwhistles, 1024)):
                 mr = self.post_lookup.insert([document_batch, dogwhistle_batch, embedding_batch])
     
@@ -112,6 +123,9 @@ class MilvusDB:
             field_name="embeddings", 
             index_params=self.index_params
         )
+
+        self.post_lookup = Collection(self.collection_name)      
+        self.post_lookup.load()
 
 
     def get_top_k_documents(self, documents_not_to_include: List[int], centroid: List[float], top_k: int) -> List[str]:
@@ -122,6 +136,7 @@ class MilvusDB:
             "param": {"metric_type": "IP"},
             "limit": top_k,
             "expr": f"not (tweet_id in {documents_not_to_include})",
+            "output_fields": ["post", "dogwhistle"]
         }
 
         res = self.post_lookup.search(**search_param)
