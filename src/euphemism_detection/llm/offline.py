@@ -56,17 +56,10 @@ class OfflineLLM:
         :return: list of cleaned responses
         :rtype: List[str]
         """
-        responses = []
-
         with torch.inference_mode():
-            for i in tqdm(range(0, len(examples), self.batch_size), ncols=0):
-                prompt_batch = examples[i : min(i + self.batch_size, len(examples))]
+            responses = [x["generated_text"] for x in self.pipeline_model(examples, max_new_tokens=self.max_tokens)]
 
-                response = self.get_response(prompt_batch)
-
-                response = [self.format_response(x, prompt) for x, prompt in zip(response, prompt_batch)]
-
-                responses.extend(response)
+        responses = [self.format_response(x, prompt) for x, prompt in zip(responses, examples)]
 
         del self.model
         torch.cuda.empty_cache()
