@@ -36,8 +36,16 @@ class FitBert:
 
     def _tokens_to_masked_ids(self, tokens, mask_ind):
         masked_tokens = tokens[:]
-        masked_tokens[mask_ind] = "[MASK]"
-        masked_tokens = ["[CLS]"] + masked_tokens + ["[SEP]"]
+
+        if "bernice" in self.bert.config._name_or_path:
+            masked_tokens[mask_ind] = "<mask>"
+            masked_tokens = ["<s>"] + masked_tokens + ["</s>"]
+        elif "bertweet" in self.bert.config._name_or_path:
+            masked_tokens[mask_ind] = "<mask>"
+            masked_tokens = ["<s>"] + masked_tokens + ["</s>"]
+        elif "spanbert"in self.bert.config._name_or_path:
+            masked_tokens[mask_ind] = "[MASK]"
+            masked_tokens = ["[CLS]"] + masked_tokens + ["[SEP]"]
 
         masked_ids = self.tokenizer.convert_tokens_to_ids(masked_tokens)
 
