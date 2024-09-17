@@ -8,9 +8,9 @@ import json
 
 import zlib
 
-import numpy as np
-
 import pandas as pd
+
+import numpy as np
 
 try:
     import re2 as re
@@ -95,7 +95,7 @@ def main(args):
 
                         batch.append(tweet_text)
 
-                        matches = re.findall(pattern, tweet_text)
+                        matches = [str(x).replace("(?:\\s|$)", "").replace("(?:^|\\s)", "").replace("\\", "") for x in re.findall(pattern, tweet_text)]
 
                         dogwhistles_found.append(matches)
 
