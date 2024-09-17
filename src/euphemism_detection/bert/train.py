@@ -32,9 +32,11 @@ class TrainBERT:
             self.model_name, num_labels=len(self.labels), label2id=self.label2id, id2label=self.id2label
         )
 
+        self.max_length = self.model.config.max_position_embeddings
+
     
     def tokenize(self, batch):
-        return self.tokenizer(batch['text'], padding='max_length', truncation=True, return_tensors="pt")
+        return self.tokenizer(batch['text'], padding="max_length", truncation=True, max_length=self.max_length, return_tensors="pt")
     
     def train(self, X: List[str], y: List[str]) -> None:
 
@@ -45,7 +47,7 @@ class TrainBERT:
         tokenized_dataset = dataset.map(self.tokenize, batched=True, remove_columns=["text"])
 
         training_args = TrainingArguments(
-            output_dir=self.output_folder,
+            output_dir=os.path.join(self.output_folder, self.model_name.replace("/", "-")),
             per_device_train_batch_size=self.batch_size,
             learning_rate=self.lr,
             num_train_epochs=self.epochs,
@@ -54,7 +56,7 @@ class TrainBERT:
             torch_compile=True, # optimizations
             optim="adamw_torch_fused", # improved optimizer 
             # logging & evaluation strategies
-            logging_dir=os.path.join(self.output_folder, "logs"),
+            logging_dir=os.path.join(self.output_folder, self.model_name.replace("/", "-"), "logs"),
             logging_strategy="steps",
             logging_steps=200,
             evaluation_strategy="epoch",
@@ -71,6 +73,4 @@ class TrainBERT:
 
         trainer.train()
 
-        self.tokenizer.save_pretrained(self.output_folder)
-
-        trainer.save_pretrained(self.output_folder)
+        self.tokenizer.save_pretrained(os.path.join(self.output_folder, self.model_name.replace("/", "-")))
