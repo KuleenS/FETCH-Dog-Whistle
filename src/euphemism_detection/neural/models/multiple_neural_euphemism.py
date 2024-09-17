@@ -229,13 +229,13 @@ class MultiNeuralEuphemismDetector:
 
         print("output cand", len(phrase_cand))
 
-        phrase_cand, _ = self.rank_by_spanbert(phrase_cand, sentences, given_keywords, thres)
+        self.rank_by_spanbert(phrase_cand, sentences, given_keywords, thres)
 
         # print("output cand", len(phrase_cand))
         
         # return phrase_cand, []
 
-    def euphemism_detection(self, input_keywords: List[str], files: List[str], skip: bool, multi: bool):
+    def euphemism_detection(self, input_keywords: List[str], files: List[str]):
         MASK = ' [MASK] '
         masked_sentence = []
 
@@ -313,15 +313,10 @@ class MultiNeuralEuphemismDetector:
         else:
             masked_sentence = self.data
         
-        if not multi:
-            top_words, top_words_tuple, _ = self.MLM(masked_sentence, input_keywords, thres=self.thres, filter_uninformative=0)
-        else:
-            ini_top_words, _, good_masked_sentences = self.MLM(masked_sentence, input_keywords, thres=self.thres, filter_uninformative=0)
-            top_words, top_words_tuple = self.multi_MLM(good_masked_sentences, input_keywords, ini_top_words, thres=self.thres)
+        ini_top_words, _, good_masked_sentences = self.MLM(masked_sentence, input_keywords, thres=self.thres, filter_uninformative=0)
+        self.multi_MLM(good_masked_sentences, input_keywords, ini_top_words, thres=self.thres)
 
-        return top_words
-    
     def run(self):
         input_keywords = [x.lower().strip() for x in self.given_keywords]
 
-        self.euphemism_detection(input_keywords, self.data, skip = True, multi = True)
+        self.euphemism_detection(input_keywords, self.data)
