@@ -30,6 +30,8 @@ class PredictBERT:
             self.classifier = pipeline("text-classification", model=self.model_folder, tokenizer="youngggggg/ToxiGen-ConPrompt", device="cuda:0", max_length = max_length, truncation=True)
         else:
             self.classifier = pipeline("text-classification", model=self.model_folder, tokenizer=self.model_folder, device="cuda:0", max_length = max_length, truncation=True)
+
+        self.classifier.tokenizer.pad_token = self.classifier.tokenizer.eos_token
     
     def prediction(self, X: List[str]) -> List[str]:
         results = self.classifier(X)
@@ -44,5 +46,7 @@ class PredictBERT:
             results = [0 if x["label"] == "normal" else 1 for x in results]
         elif self.model_folder in ["badmatr11x/distilroberta-base-offensive-hateful-speech-text-multiclassification"]:
             results = [0 if x["label"] == "NEITHER" else 1 for x in results]
+        else:
+            results = [1 if x["label"] == "LABEL_1" else 0 for x in results]
 
         return results
