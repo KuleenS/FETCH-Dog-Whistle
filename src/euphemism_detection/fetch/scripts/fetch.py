@@ -140,15 +140,15 @@ def main(args):
                 print("FAILURE NO POSTS")
 
     elif args.filtering_method == "bert-train":
+
+        sampled_posts = db.sample_negative_posts(total_tweet_ids, len(total_seed_posts))
+
+        X = total_seed_posts + sampled_posts
+
+        y = ["dogwhistle"]*len(total_seed_posts) + ["no_dogwhistle"]*len(sampled_posts)
         
         for model_name in args.models:
             model = TrainBERT(model_name, args.lr, args.weight_decay, args.batch_size, args.epochs, args.output_folder)
-
-            sampled_posts = db.sample_negative_posts(total_tweet_ids, len(total_seed_posts))
-
-            X = total_seed_posts + sampled_posts
-
-            y = ["dogwhistle"]*len(total_seed_posts) + ["no_dogwhistle"]*len(sampled_posts)
 
             model.train(X,y)
 
