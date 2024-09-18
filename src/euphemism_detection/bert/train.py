@@ -19,7 +19,14 @@ class TrainBERT:
         self.epochs = epochs
         self.output_folder = output_folder
 
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        if self.model_name == "tomh/toxigen_hatebert":
+            self.tokenizer = AutoTokenizer.from_pretrained("GroNLP/hateBERT")
+        elif self.model_name in ["adediu25/subtle-toxicgenconprompt-all-no-lora", "adediu25/implicit-toxicgenconprompt-all-no-lora"]:
+            self.tokenizer = AutoTokenizer.from_pretrained("youngggggg/ToxiGen-ConPrompt") 
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+    
+            self.tokenizer.pad_token = self.tokenizer.eos_token
 
         self.labels = ["dogwhistle", "no_dogwhistle"]
 
@@ -34,11 +41,9 @@ class TrainBERT:
 
         self.max_length = self.model.config.max_position_embeddings
 
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-
     
     def tokenize(self, batch):
-        return self.tokenizer(batch['text'], padding=True, truncation=True, max_length=self.max_length - 2, return_tensors="pt")
+        return self.tokenizer(batch['text'], padding='max_length', truncation=True, max_length=self.max_length - 2, return_tensors="pt")
     
     def train(self, X: List[str], y: List[str]) -> None:
 
