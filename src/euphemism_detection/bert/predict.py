@@ -22,14 +22,14 @@ class PredictBERT:
             max_length = self.max_length[model_folder]
         
         elif model_name == "jhu-clsp/bernice" or model_name == "vinai/bertweet-base":
-            max_length = 130
+            max_length = 128
         
         if self.model_folder== "tomh/toxigen_hatebert":
             self.classifier = pipeline("text-classification", model=self.model_folder, tokenizer="GroNLP/hateBERT", device="cuda:0", max_length = max_length, truncation=True)
         elif self.model_folder in ["adediu25/subtle-toxicgenconprompt-all-no-lora", "adediu25/implicit-toxicgenconprompt-all-no-lora"]:
             self.classifier = pipeline("text-classification", model=self.model_folder, tokenizer="youngggggg/ToxiGen-ConPrompt", device="cuda:0", max_length = max_length, truncation=True)
         else:
-            self.classifier = pipeline("text-classification", self.model_folder, device="cuda:0", max_length = max_length, truncation=True)
+            self.classifier = pipeline("text-classification", model=self.model_folder, tokenizer=self.model_folder, device="cuda:0", max_length = max_length, truncation=True)
     
     def prediction(self, X: List[str]) -> List[str]:
         results = self.classifier(X)
