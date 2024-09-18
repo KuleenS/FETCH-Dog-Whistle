@@ -16,17 +16,22 @@ class PredictBERT:
             "facebook/roberta-hate-speech-dynabench-r4-target": 512, 
             "cardiffnlp/twitter-roberta-base-hate": 512,
             "Hate-speech-CNERG/bert-base-uncased-hatexplain" :510,
+            "vinai/bertweet-base" : 128,
+            "jhu-clsp/bernice" : 128
         }
 
         if model_folder in self.max_length:
             max_length = self.max_length[model_folder]
         
-        elif model_name == "jhu-clsp/bernice" or model_name == "vinai/bertweet-base":
-            max_length = 128
+        elif model_name in self.max_length:
+            max_length = self.max_length[model_name]
         
-        if self.model_folder== "tomh/toxigen_hatebert":
+        else:
+            max_length = 510
+        
+        if model_name == "tomh/toxigen_hatebert":
             self.classifier = pipeline("text-classification", model=self.model_folder, tokenizer="GroNLP/hateBERT", device="cuda:0", max_length = max_length, truncation=True)
-        elif self.model_folder in ["adediu25/subtle-toxicgenconprompt-all-no-lora", "adediu25/implicit-toxicgenconprompt-all-no-lora"]:
+        elif model_name in ["adediu25/subtle-toxicgenconprompt-all-no-lora", "adediu25/implicit-toxicgenconprompt-all-no-lora"]:
             self.classifier = pipeline("text-classification", model=self.model_folder, tokenizer="youngggggg/ToxiGen-ConPrompt", device="cuda:0", max_length = max_length, truncation=True)
         else:
             self.classifier = pipeline("text-classification", model=self.model_folder, tokenizer=self.model_folder, device="cuda:0", max_length = max_length, truncation=True)
