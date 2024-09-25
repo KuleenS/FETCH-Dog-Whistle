@@ -12,6 +12,7 @@ from more_itertools import chunked
 
 from tqdm import tqdm
 
+
 class FitBert:
     def __init__(
         self,
@@ -19,7 +20,7 @@ class FitBert:
         tokenizer=None,
         mask_token="***mask***",
         disable_gpu=False,
-        batch_size = 2
+        batch_size=2,
     ):
         self.mask_token = mask_token
         self.batch_size = batch_size
@@ -28,7 +29,7 @@ class FitBert:
         )
         print("device:", self.device)
 
-        self.bert = model 
+        self.bert = model
 
         self.tokenizer = tokenizer
 
@@ -43,14 +44,14 @@ class FitBert:
         elif "bertweet" in self.bert.config._name_or_path:
             masked_tokens[mask_ind] = "<mask>"
             masked_tokens = ["<s>"] + masked_tokens + ["</s>"]
-        elif "spanbert"in self.bert.config._name_or_path:
+        elif "spanbert" in self.bert.config._name_or_path:
             masked_tokens[mask_ind] = "[MASK]"
             masked_tokens = ["[CLS]"] + masked_tokens + ["[SEP]"]
 
         masked_ids = self.tokenizer.convert_tokens_to_ids(masked_tokens)
 
         return masked_ids
-    
+
     def rank_multi(self, masked_sent: str, options: List[str]):
         masked_sentences = [masked_sent.replace(self.mask_token, x) for x in options]
 
@@ -63,18 +64,26 @@ class FitBert:
                 tokens_batch = [self.tokenizer.tokenize(x)[:128] for x in batch]
             elif "bertweet" in self.bert.config._name_or_path:
                 tokens_batch = [self.tokenizer.tokenize(x)[:128] for x in batch]
-            elif "spanbert"in self.bert.config._name_or_path:
+            elif "spanbert" in self.bert.config._name_or_path:
                 tokens_batch = [self.tokenizer.tokenize(x)[:510] for x in batch]
-            
+
             max_length = len(max(tokens_batch, key=lambda x: len(x)))
 
             print("padding sentences")
-            
-            tokens_batch = [x+[self.tokenizer.pad_token]*(max_length - len(x)) for x in tokens_batch]
 
-            tokens_ids_batch = [self.tokenizer.convert_tokens_to_ids(x) for x in tokens_batch]
+            tokens_batch = [
+                x + [self.tokenizer.pad_token] * (max_length - len(x))
+                for x in tokens_batch
+            ]
 
-            tokens_batch_masked = [[self._tokens_to_masked_ids(tokens, i) for i in range(len(tokens))] for tokens in tokens_batch]
+            tokens_ids_batch = [
+                self.tokenizer.convert_tokens_to_ids(x) for x in tokens_batch
+            ]
+
+            tokens_batch_masked = [
+                [self._tokens_to_masked_ids(tokens, i) for i in range(len(tokens))]
+                for tokens in tokens_batch
+            ]
 
             lengths_of_tokens = [len(x) for x in tokens_batch_masked]
 
@@ -108,7 +117,7 @@ class FitBert:
                         total_prob += float(probs_for_tokens[j][j + 1][token].item())
 
                 total_probs_batched.append(total_prob)
-            
+
             del tens, preds, probs, probs_batched
 
             if self.device == "cuda":
