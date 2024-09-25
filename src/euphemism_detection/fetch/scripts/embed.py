@@ -19,9 +19,12 @@ except ImportError:
 
 from tqdm import tqdm
 
-from src.euphemism_detection.fetch.embedding.sentencetransformer import SentenceTransformerEmbedder
+from src.euphemism_detection.fetch.embedding.sentencetransformer import (
+    SentenceTransformerEmbedder,
+)
 
-def main(args): 
+
+def main(args):
     input_files = args.input_files
 
     sge_id = args.id
@@ -32,7 +35,11 @@ def main(args):
 
     dogwhistle_glossary_df = pd.read_csv(args.dogwhistle_file_path, sep="\t")
 
-    dogwhistle_set = [item for sublist in dogwhistle_glossary_df["Surface Forms"].str.split(";").tolist() for item in sublist]
+    dogwhistle_set = [
+        item
+        for sublist in dogwhistle_glossary_df["Surface Forms"].str.split(";").tolist()
+        for item in sublist
+    ]
 
     dogwhistle_set = list(set([x.lower().strip() for x in dogwhistle_set]))
 
@@ -66,7 +73,7 @@ def main(args):
 
                 if len(tweet) != 0:
                     if isinstance(tweet, str):
-                        try: 
+                        try:
                             tweet = json.loads(tweet)
                         except json.decoder.JSONDecodeError:
                             print("Decode failure")
@@ -78,24 +85,34 @@ def main(args):
 
                         tweet_text = tweet["text"].lower().strip()
 
-                        tweet_text = re.sub(r"https:(\/\/t\.co\/([A-Za-z0-9]|[A-Za-z]){10})", "", tweet_text)
+                        tweet_text = re.sub(
+                            r"https:(\/\/t\.co\/([A-Za-z0-9]|[A-Za-z]){10})",
+                            "",
+                            tweet_text,
+                        )
 
                     # dealing with gab data
                     elif "body" in tweet:
                         tweet_text = tweet["body"]
 
                         if isinstance(tweet_text, str):
-                            tweet_text= tweet_text.lower().strip()
+                            tweet_text = tweet_text.lower().strip()
                         else:
                             tweet_text = ""
 
                         tweet_text = re.sub(r"http\S+", "", tweet_text)
-                    
+
                     if len(tweet_text) != 0:
 
                         batch.append(tweet_text)
 
-                        matches = [str(x).replace("(?:\\s|$)", "").replace("(?:^|\\s)", "").replace("\\", "") for x in re.findall(pattern, tweet_text)]
+                        matches = [
+                            str(x)
+                            .replace("(?:\\s|$)", "")
+                            .replace("(?:^|\\s)", "")
+                            .replace("\\", "")
+                            for x in re.findall(pattern, tweet_text)
+                        ]
 
                         dogwhistles_found.append(matches)
 
@@ -122,7 +139,12 @@ def main(args):
                         if not os.path.exists(out):
                             os.makedirs(out, exist_ok=True)
 
-                        np.savez(os.path.join(output_folder, str(batch_id), f"data.npz"), documents=documents, dogwhistles=dogwhistles_found, embeddings=embeddings)
+                        np.savez(
+                            os.path.join(output_folder, str(batch_id), f"data.npz"),
+                            documents=documents,
+                            dogwhistles=dogwhistles_found,
+                            embeddings=embeddings,
+                        )
 
                         batch_id += 1
 
@@ -154,15 +176,19 @@ def main(args):
 
     embeddings = np.array(embeddings)
 
-    np.savez(os.path.join(output_folder, str(batch_id), f"data.npz"), documents=documents, dogwhistles=dogwhistles_found, embeddings=embeddings)
+    np.savez(
+        os.path.join(output_folder, str(batch_id), f"data.npz"),
+        documents=documents,
+        dogwhistles=dogwhistles_found,
+        embeddings=embeddings,
+    )
 
-                        
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_path')
-    parser.add_argument('--input_files', nargs="+")
-    parser.add_argument('--dogwhistle_file_path')
-    parser.add_argument('--id')
+    parser.add_argument("--output_path")
+    parser.add_argument("--input_files", nargs="+")
+    parser.add_argument("--dogwhistle_file_path")
+    parser.add_argument("--id")
     args = parser.parse_args()
     main(args)
