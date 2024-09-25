@@ -34,10 +34,13 @@ class GeminiLLM:
         :return: response text from API
         :rtype: str
         """
-        response = self.model.generate_content(prompts, generation_config=genai.types.GenerationConfig(
+        response = self.model.generate_content(
+            prompts,
+            generation_config=genai.types.GenerationConfig(
                 max_output_tokens=self.max_tokens,
                 temperature=self.temperature,
-            ))
+            ),
+        )
 
         return response.text.lower().strip()
 

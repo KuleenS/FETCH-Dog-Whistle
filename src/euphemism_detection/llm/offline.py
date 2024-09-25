@@ -3,7 +3,7 @@ import torch
 from typing import Iterable, List, Dict, Any
 
 from transformers import pipeline
-    
+
 from tqdm import tqdm
 
 
@@ -23,16 +23,19 @@ class OfflineLLM:
         self.max_tokens = max_tokens
 
         self.pipeline_model = pipeline(
-            "text-generation", model=self.model_name, device_map="auto", batch_size = 4
+            "text-generation", model=self.model_name, device_map="auto", batch_size=4
         )
 
         if isinstance(self.pipeline_model.model.config.eos_token_id, list):
-            self.pipeline_model.tokenizer.pad_token_id = self.pipeline_model.model.config.eos_token_id[0]
+            self.pipeline_model.tokenizer.pad_token_id = (
+                self.pipeline_model.model.config.eos_token_id[0]
+            )
         else:
-            self.pipeline_model.tokenizer.pad_token_id = self.pipeline_model.model.config.eos_token_id
+            self.pipeline_model.tokenizer.pad_token_id = (
+                self.pipeline_model.model.config.eos_token_id
+            )
 
         self.pipeline_model.tokenizer.padding_side = "left"
-
 
     def format_response(self, response: str, prompt: str) -> str:
         """Clean up response from Offline HF model and return generated string
@@ -42,7 +45,7 @@ class OfflineLLM:
         :return: generated string
         :rtype: str
         """
-        text = response[len(prompt):].replace("\n", " ").strip().lower()
+        text = response[len(prompt) :].replace("\n", " ").strip().lower()
         return text
 
     def generate_from_prompts(self, examples: Iterable[str]) -> List[str]:
@@ -55,10 +58,12 @@ class OfflineLLM:
         """
         with torch.inference_mode():
             responses = self.pipeline_model(examples, max_new_tokens=self.max_tokens)
-        
+
         responses = [x[0]["generated_text"] for x in responses]
 
-        responses = [self.format_response(x, prompt) for x, prompt in zip(responses, examples)]
+        responses = [
+            self.format_response(x, prompt) for x, prompt in zip(responses, examples)
+        ]
 
         del self.pipeline_model
 

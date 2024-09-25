@@ -6,6 +6,7 @@ from openai import OpenAI
 
 from tqdm import tqdm
 
+
 class ChatGPTLLM:
     def __init__(self, model_name: str, temperature: float = 1, max_tokens: int = 1):
         """ChatGPT initializer
@@ -47,7 +48,7 @@ class ChatGPTLLM:
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         )
-        
+
         return response
 
     def generate_from_prompts(self, examples: Iterable[str]) -> List[str]:
@@ -68,7 +69,12 @@ class ChatGPTLLM:
             # catch any errors that happen
             try:
                 response = self.get_response(example)
-                responses.append(response.choices[0].message.content.replace("\n", " ").strip().lower())
+                responses.append(
+                    response.choices[0]
+                    .message.content.replace("\n", " ")
+                    .strip()
+                    .lower()
+                )
             except Exception as e:
                 print(e)
                 responses.append("")
