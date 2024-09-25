@@ -6,8 +6,9 @@ from rake_nltk import Rake
 
 from src.euphemism_detection.fetch.extraction.base_filter import BaseFilter
 
+
 class RAKEFilter(BaseFilter):
-    
+
     def __init__(self, ngram_range: tuple[int, int]):
         super().__init__()
 

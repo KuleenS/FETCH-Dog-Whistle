@@ -8,8 +8,9 @@ import pytextrank
 
 from src.euphemism_detection.fetch.extraction.base_filter import BaseFilter
 
+
 class TextRankFilter(BaseFilter):
-    
+
     def __init__(self, model: str = "en_core_web_md"):
         super().__init__()
 
