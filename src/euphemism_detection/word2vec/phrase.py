@@ -8,7 +8,10 @@ import csv
 
 from tqdm import tqdm
 
-def original_scorer(worda_count, wordb_count, bigram_count, len_vocab, min_count, corpus_word_count):
+
+def original_scorer(
+    worda_count, wordb_count, bigram_count, len_vocab, min_count, corpus_word_count
+):
     r"""Bigram scoring function, based on the original `Mikolov, et. al: "Distributed Representations
     of Words and Phrases and their Compositionality" <https://arxiv.org/abs/1310.4546>`_.
 
@@ -39,15 +42,16 @@ def original_scorer(worda_count, wordb_count, bigram_count, len_vocab, min_count
     """
     denom = worda_count * wordb_count
     if denom == 0:
-        return float('-inf')
+        return float("-inf")
     return (bigram_count - min_count) / float(denom) * len_vocab
 
-def score_candidate(vocab, word_a, word_b, in_between, delimiter = "_"):
+
+def score_candidate(vocab, word_a, word_b, in_between, delimiter="_"):
     # Micro optimization: check for quick early-out conditions, before the actual scoring.
 
-    min_count=5
-    
-    threshold=10.0
+    min_count = 5
+
+    threshold = 10.0
 
     corpus_word_count = len(vocab)
 
@@ -66,13 +70,18 @@ def score_candidate(vocab, word_a, word_b, in_between, delimiter = "_"):
         return None, None
 
     score = original_scorer(
-        worda_count=word_a_cnt, wordb_count=word_b_cnt, bigram_count=phrase_cnt,
-        len_vocab=len(vocab), min_count=min_count, corpus_word_count=corpus_word_count,
+        worda_count=word_a_cnt,
+        wordb_count=word_b_cnt,
+        bigram_count=phrase_cnt,
+        len_vocab=len(vocab),
+        min_count=min_count,
+        corpus_word_count=corpus_word_count,
     )
     if score <= threshold:
         return None, None
 
     return phrase, score
+
 
 def analyze_sentence(sentence, connector_words, vocab):
     """Analyze a sentence, concatenating any detected phrases into a single token.
@@ -107,7 +116,10 @@ def analyze_sentence(sentence, connector_words, vocab):
                     yield start_token, None
                     for w in in_between:
                         yield w, None
-                    start_token, in_between = word, []  # new potential phrase starts here
+                    start_token, in_between = (
+                        word,
+                        [],
+                    )  # new potential phrase starts here
             else:
                 # Not inside a phrase yet; start a new phrase candidate here.
                 start_token, in_between = word, []
@@ -124,6 +136,7 @@ def analyze_sentence(sentence, connector_words, vocab):
         for w in in_between:
             yield w, None
 
+
 def main(args):
 
     with open(args.vocab) as f:
@@ -132,39 +145,50 @@ def main(args):
     connector_words = frozenset(
         " a an the "  # articles; we never care about these in MWEs
         " for of with without at from to in on by "  # prepositions; incomplete on purpose, to minimize FNs
-        " and or "  # conjunctions; incomplete on purpose, to minimize FNs
-        .split()    
+        " and or ".split()  # conjunctions; incomplete on purpose, to minimize FNs
     )
-    
+
     for input_file in tqdm(args.input_files, desc="Input Files"):
 
         out_file = os.path.basename(input_file)
 
         results = []
-        
+
         with open(os.path.join(args.output_folder, out_file), "w") as out:
             writer_csv = csv.writer(out)
 
             with open(input_file) as in_file:
-                
+
                 csv_in_file = csv.reader(in_file)
 
                 for line in tqdm(csv_in_file, desc="Lines in File"):
                     sentence = line[0].strip().split()
 
-                    results.append([" ".join([token for token, _ in analyze_sentence(sentence, connector_words, vocab)])])
+                    results.append(
+                        [
+                            " ".join(
+                                [
+                                    token
+                                    for token, _ in analyze_sentence(
+                                        sentence, connector_words, vocab
+                                    )
+                                ]
+                            )
+                        ]
+                    )
 
                     if len(results) > 500:
                         writer_csv.writerows(results)
                         results = []
-                    
+
                 writer_csv.writerows(results)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_files', nargs="+")
-    parser.add_argument('--output_folder')
-    parser.add_argument('--vocab')
+    parser.add_argument("--input_files", nargs="+")
+    parser.add_argument("--output_folder")
+    parser.add_argument("--vocab")
 
     args = parser.parse_args()
     main(args)

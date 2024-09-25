@@ -8,6 +8,7 @@ RULE_DEFAULT = 0
 RULE_DISCARD = 1
 RULE_KEEP = 2
 
+
 def keep_vocab_item(word, count, min_count, trim_rule=None):
     """Should we keep `word` in the vocab or remove it?
 
@@ -42,6 +43,7 @@ def keep_vocab_item(word, count, min_count, trim_rule=None):
         else:
             return default_res
 
+
 def prune_vocab(vocab, min_reduce, trim_rule=None):
     """Remove all entries from the `vocab` dictionary with count smaller than `min_reduce`.
 
@@ -65,14 +67,20 @@ def prune_vocab(vocab, min_reduce, trim_rule=None):
     result = 0
     old_len = len(vocab)
     for w in list(vocab):  # make a copy of dict's keys
-        if not keep_vocab_item(w, vocab[w], min_reduce, trim_rule):  # vocab[w] <= min_reduce:
+        if not keep_vocab_item(
+            w, vocab[w], min_reduce, trim_rule
+        ):  # vocab[w] <= min_reduce:
             result += vocab[w]
             del vocab[w]
     print(
         "pruned out %i tokens with count <=%i (before %i, after %i)",
-        old_len - len(vocab), min_reduce, old_len, len(vocab)
+        old_len - len(vocab),
+        min_reduce,
+        old_len,
+        len(vocab),
     )
     return result
+
 
 def main(args):
 
@@ -82,16 +90,15 @@ def main(args):
 
     sentence_no, total_words, min_reduce = -1, 0, 1
 
-    delimiter = '_'
+    delimiter = "_"
 
     connector_words = frozenset(
         " a an the "  # articles; we never care about these in MWEs
         " for of with without at from to in on by "  # prepositions; incomplete on purpose, to minimize FNs
-        " and or "  # conjunctions; incomplete on purpose, to minimize FNs
-        .split()    
+        " and or ".split()  # conjunctions; incomplete on purpose, to minimize FNs
     )
 
-    with open(args.input_file, 'r') as file:
+    with open(args.input_file, "r") as file:
 
         for line in file:
 
@@ -100,17 +107,26 @@ def main(args):
             if sentence_no % 10_000 == 0:
                 print(
                     "PROGRESS: at sentence #%i, processed %i words and %i word types",
-                    sentence_no, total_words, len(vocab),
+                    sentence_no,
+                    total_words,
+                    len(vocab),
                 )
             start_token, in_between = None, []
             for word in sentence:
                 if word not in connector_words:
                     vocab[word] = vocab.get(word, 0) + 1
                     if start_token is not None:
-                        phrase_tokens = itertools.chain([start_token], in_between, [word])
+                        phrase_tokens = itertools.chain(
+                            [start_token], in_between, [word]
+                        )
                         joined_phrase_token = delimiter.join(phrase_tokens)
-                        vocab[joined_phrase_token] = vocab.get(joined_phrase_token, 0) + 1
-                    start_token, in_between = word, []  # treat word as both end of a phrase AND beginning of another
+                        vocab[joined_phrase_token] = (
+                            vocab.get(joined_phrase_token, 0) + 1
+                        )
+                    start_token, in_between = (
+                        word,
+                        [],
+                    )  # treat word as both end of a phrase AND beginning of another
                 elif start_token is not None:
                     in_between.append(word)
                 total_words += 1
@@ -121,19 +137,22 @@ def main(args):
 
         print(
             "collected %i token types (unigram + bigrams) from a corpus of %i words and %i sentences",
-            len(vocab), total_words, sentence_no + 1,
+            len(vocab),
+            total_words,
+            sentence_no + 1,
         )
 
     vocab["min_reduce_number"] = min_reduce
-    
-    with open(args.output_file, 'w') as file:
+
+    with open(args.output_file, "w") as file:
         file.write(json.dumps(vocab))
+
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_file')
-    parser.add_argument('--output_file')
+    parser.add_argument("--input_file")
+    parser.add_argument("--output_file")
 
     args = parser.parse_args()
     main(args)

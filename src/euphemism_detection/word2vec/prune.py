@@ -6,6 +6,7 @@ RULE_DEFAULT = 0
 RULE_DISCARD = 1
 RULE_KEEP = 2
 
+
 def keep_vocab_item(word, count, min_count, trim_rule=None):
     """Should we keep `word` in the vocab or remove it?
 
@@ -40,6 +41,7 @@ def keep_vocab_item(word, count, min_count, trim_rule=None):
         else:
             return default_res
 
+
 def merge_counts(dict1, dict2):
     """Merge `dict1` of (word, freq1) and `dict2` of (word, freq2) into `dict1` of (word, freq1+freq2).
     Parameters
@@ -60,6 +62,7 @@ def merge_counts(dict1, dict2):
             dict1[word] = freq
 
     return dict1
+
 
 def prune_vocab(vocab, min_reduce, trim_rule=None):
     """Remove all entries from the `vocab` dictionary with count smaller than `min_reduce`.
@@ -84,17 +87,23 @@ def prune_vocab(vocab, min_reduce, trim_rule=None):
     result = 0
     old_len = len(vocab)
     for w in list(vocab):  # make a copy of dict's keys
-        if not keep_vocab_item(w, vocab[w], min_reduce, trim_rule):  # vocab[w] <= min_reduce:
+        if not keep_vocab_item(
+            w, vocab[w], min_reduce, trim_rule
+        ):  # vocab[w] <= min_reduce:
             result += vocab[w]
             del vocab[w]
     print(
         "pruned out %i tokens with count <=%i (before %i, after %i)",
-        old_len - len(vocab), min_reduce, old_len, len(vocab)
+        old_len - len(vocab),
+        min_reduce,
+        old_len,
+        len(vocab),
     )
     return result
 
+
 def main(args):
-    
+
     total_counts = {}
 
     min_reduces = []
@@ -109,17 +118,18 @@ def main(args):
         del data["min_reduce_number"]
 
         total_counts = merge_counts(total_counts, data)
-    
+
     prune_vocab(total_counts, max(min_reduces))
 
-    with open(args.output_file, 'w') as file:
+    with open(args.output_file, "w") as file:
         file.write(json.dumps(total_counts))
+
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_files', nargs="+")
-    parser.add_argument('--output_file')
+    parser.add_argument("--input_files", nargs="+")
+    parser.add_argument("--output_file")
 
     args = parser.parse_args()
     main(args)

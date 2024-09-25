@@ -1,4 +1,3 @@
-
 """
 Keyword/phrase Matching
 
@@ -53,6 +52,7 @@ import string
 ## External Libraries
 from tqdm import tqdm
 
+
 ## Project Tools
 def flatten(l):
     """
@@ -60,90 +60,98 @@ def flatten(l):
 
     Args:
         l (list of lists): List of lists
-    
+
     Returns:
         flattened_list (list): Flattened list
     """
     flattened_list = [item for sublist in l for item in sublist]
     return flattened_list
 
-def chunks(l,
-           n):
+
+def chunks(l, n):
     """
     Yield successive n-sized chunks from l.
 
     Args:
         l (list): List of objects
         n (int): Chunksize
-    
+
     Yields:
         Chunks
     """
     for i in range(0, len(l), n):
-        yield l[i:i + n]
+        yield l[i : i + n]
+
+
 ######################
 ### Globals
 ######################
 
 ## Special Characters
-PUNCTUATION = string.punctuation.replace("#","")
+PUNCTUATION = string.punctuation.replace("#", "")
 SPECIAL = "“”…‘’´"
 
 ######################
 ### Tracker Class
 ######################
 
+
 class Tracker(object):
+    """ """
 
-    """
-
-    """
-
-    def __init__(self,
-                 include_mentions=False):
-        """
-
-        """
+    def __init__(self, include_mentions=False):
+        """ """
         ## Properties
         self._include_mentions = include_mentions
         ## Term Set
         self._terms = {}
-    
-    def _create_regex_dict(self,
-                           terms,
-                           include_hashtag=True):
-        """
-        
-        """
+
+    def _create_regex_dict(self, terms, include_hashtag=True):
+        """ """
         ## Initialize Cache
         regex_dict = {}
         ## Add Terms to Dictionary
         for t in terms:
             ## Stem Type
-            is_prefix_stem = t.endswith("*") ## String Starts With Term
-            is_suffix_stem = t.startswith("*") ## String Ends With Term
-            is_hashtag = t.startswith("#") ## String is a Hashtag
+            is_prefix_stem = t.endswith("*")  ## String Starts With Term
+            is_suffix_stem = t.startswith("*")  ## String Ends With Term
+            is_hashtag = t.startswith("#")  ## String is a Hashtag
             is_multi_gram = t.count(" ") > 0
             ## Format Root
             t_stem = re.escape(t.rstrip("*").lstrip("*"))
             ## Parse Term
             if t_stem.isupper():
-                regex_dict[t] = (re.compile(t_stem), is_prefix_stem, is_suffix_stem, is_hashtag)
+                regex_dict[t] = (
+                    re.compile(t_stem),
+                    is_prefix_stem,
+                    is_suffix_stem,
+                    is_hashtag,
+                )
                 if include_hashtag and not is_hashtag and not is_multi_gram:
-                    regex_dict["#"+t] = (re.compile("#" + t_stem), is_prefix_stem, is_suffix_stem, False)
+                    regex_dict["#" + t] = (
+                        re.compile("#" + t_stem),
+                        is_prefix_stem,
+                        is_suffix_stem,
+                        False,
+                    )
             else:
-                regex_dict[t] = (re.compile(t_stem, re.IGNORECASE), is_prefix_stem, is_suffix_stem, is_hashtag)
+                regex_dict[t] = (
+                    re.compile(t_stem, re.IGNORECASE),
+                    is_prefix_stem,
+                    is_suffix_stem,
+                    is_hashtag,
+                )
                 if include_hashtag and not is_hashtag and not is_multi_gram:
-                    regex_dict["#"+t] = (re.compile("#"+t_stem, re.IGNORECASE), is_prefix_stem, is_suffix_stem, False)
+                    regex_dict["#" + t] = (
+                        re.compile("#" + t_stem, re.IGNORECASE),
+                        is_prefix_stem,
+                        is_suffix_stem,
+                        False,
+                    )
         return regex_dict
-    
-    def _starts_with(self,
-                     text,
-                     index,
-                     prefix):
-        """
 
-        """
+    def _starts_with(self, text, index, prefix):
+        """ """
         i = index
         while i >= 0:
             if text[i] == " ":
@@ -153,15 +161,15 @@ class Tracker(object):
             i -= 1
         return False
 
-    def _search_full_words(self,
-                           text,
-                           regex,
-                           is_prefix_stem=False,
-                           is_suffix_stem=False,
-                           include_mentions=False):
-        """
-        
-        """
+    def _search_full_words(
+        self,
+        text,
+        regex,
+        is_prefix_stem=False,
+        is_suffix_stem=False,
+        include_mentions=False,
+    ):
+        """ """
         matches = []
         L = len(text)
         for match in regex.finditer(text):
@@ -169,11 +177,26 @@ class Tracker(object):
             match_span = match.span()
             ## See if the Span Lies at the Start of the Text
             if include_mentions:
-                starts_text = match_span[0] == 0 or text[match_span[0]-1] == " " or text[match_span[0]-1] in (PUNCTUATION + SPECIAL)
+                starts_text = (
+                    match_span[0] == 0
+                    or text[match_span[0] - 1] == " "
+                    or text[match_span[0] - 1] in (PUNCTUATION + SPECIAL)
+                )
             else:
-                starts_text = match_span[0] == 0 or text[match_span[0]-1] == " " or (text[match_span[0]-1] in (PUNCTUATION + SPECIAL) and not self._starts_with(text,match_span[0],"@"))
+                starts_text = (
+                    match_span[0] == 0
+                    or text[match_span[0] - 1] == " "
+                    or (
+                        text[match_span[0] - 1] in (PUNCTUATION + SPECIAL)
+                        and not self._starts_with(text, match_span[0], "@")
+                    )
+                )
             ## See if the Span Lies at the End of the Text
-            ends_text = match_span[1] == L or text[match_span[1]] == " " or text[match_span[1]] in (PUNCTUATION + SPECIAL)
+            ends_text = (
+                match_span[1] == L
+                or text[match_span[1]] == " "
+                or text[match_span[1]] in (PUNCTUATION + SPECIAL)
+            )
             ## Determine Validity
             valid = True
             if not starts_text and not is_suffix_stem:
@@ -183,55 +206,41 @@ class Tracker(object):
             ## Cache
             if valid:
                 match_start, match_end = match_span
-                while match_start > 0 and len(text[match_start-1].strip()) == 1:
+                while match_start > 0 and len(text[match_start - 1].strip()) == 1:
                     match_start -= 1
                 while match_end < len(text) and len(text[match_end].strip()) == 1:
                     match_end += 1
                 matches.append((text[match_start:match_end], match_span))
         return matches
 
-    def _pattern_match(self,
-                       text,
-                       pattern_re,
-                       include_mentions=False):
-        """
-
-        """
+    def _pattern_match(self, text, pattern_re, include_mentions=False):
+        """ """
         ## Initialize Catch
         matches = []
         ## Search Through Patterns
         for keyword, (pattern, is_prefix_stem, is_suffix_stem, _) in pattern_re.items():
             ## Look for Matches
-            keyword_matches = self._search_full_words(text,
-                                                      pattern,
-                                                      is_prefix_stem=is_prefix_stem,
-                                                      is_suffix_stem=is_suffix_stem,
-                                                      include_mentions=include_mentions)
+            keyword_matches = self._search_full_words(
+                text,
+                pattern,
+                is_prefix_stem=is_prefix_stem,
+                is_suffix_stem=is_suffix_stem,
+                include_mentions=include_mentions,
+            )
             ## Format Matches
             keyword_matches = [(keyword, k[0], k[1]) for k in keyword_matches]
             ## Cache Matches
             matches.extend(keyword_matches)
         return matches
-    
-    def add_terms(self,
-                  terms,
-                  include_hashtags=False):
-        """
 
-        """
+    def add_terms(self, terms, include_hashtags=False):
+        """ """
         _terms = self._create_regex_dict(terms, include_hashtags)
         self._terms.update(_terms)
         return self
-    
-    def search(self,
-               text):
-        """
 
-        """
+    def search(self, text):
+        """ """
         ## Get Matches
-        matches = self._pattern_match(text,
-                                      self._terms,
-                                      self._include_mentions)
+        matches = self._pattern_match(text, self._terms, self._include_mentions)
         return matches
-    
-

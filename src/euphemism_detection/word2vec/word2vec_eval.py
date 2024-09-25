@@ -1,17 +1,21 @@
 import argparse
 
-import pandas as pd 
+import pandas as pd
 
 from src.euphemism_detection.metrics import Metrics
+
 
 def process_expansions_json(expansion_json_path: str):
     df = pd.read_json(expansion_json_path, orient="records", lines=True)
 
     df["source"] = df["source"].apply(lambda x: x[0])
 
-    df = pd.concat((df, pd.DataFrame(df['source'].tolist(), columns=["source", "level"])), axis=1)
+    df = pd.concat(
+        (df, pd.DataFrame(df["source"].tolist(), columns=["source", "level"])), axis=1
+    )
 
     return df
+
 
 def main(args):
 
@@ -27,7 +31,7 @@ def main(args):
 
     for x in df.groupby("level"):
 
-        a,b = x
+        a, b = x
 
         found_at_stage = [x.lower().replace("_", "") for x in b["term"].tolist()]
 
@@ -35,15 +39,21 @@ def main(args):
 
         print(len(set(total_found)))
 
-        print(metrics.measure_precision(total_found, extrapolating_dogwhistles), metrics.measure_recall(total_found, extrapolating_dogwhistles), metrics.measure_possible_recall(total_found, extrapolating_dogwhistles, args.ngrams_possible))
+        print(
+            metrics.measure_precision(total_found, extrapolating_dogwhistles),
+            metrics.measure_recall(total_found, extrapolating_dogwhistles),
+            metrics.measure_possible_recall(
+                total_found, extrapolating_dogwhistles, args.ngrams_possible
+            ),
+        )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dogwhistle_file_path')
-    parser.add_argument('--extrapolating_dogwhistle_path')
-    parser.add_argument('--expansions_path')
-    parser.add_argument('--ngrams_possible', type=int)
+    parser.add_argument("--dogwhistle_file_path")
+    parser.add_argument("--extrapolating_dogwhistle_path")
+    parser.add_argument("--expansions_path")
+    parser.add_argument("--ngrams_possible", type=int)
 
     args = parser.parse_args()
     main(args)

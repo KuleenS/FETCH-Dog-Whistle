@@ -18,32 +18,32 @@ import spacy
 
 from tqdm import tqdm
 
+
 def main(args):
     input_files = args.tweet_files
 
     sge_id = args.id
-    
+
     results = []
 
     tokenizer = BERTweetTokenizer()
 
     nlp = spacy.load("en_core_web_sm")
 
-    nlp.disable_pipes('ner', 'tagger', 'parser', 'tok2vec', 'attribute_ruler')
+    nlp.disable_pipes("ner", "tagger", "parser", "tok2vec", "attribute_ruler")
 
     with open(os.path.join(args.output_folder, f"tweets_{sge_id}.txt"), "w") as f:
 
-        writer_csv = csv.writer(f, escapechar='\\')
+        writer_csv = csv.writer(f, escapechar="\\")
 
         for i, tweet_file in tqdm(enumerate(input_files), desc="Twitter Files"):
 
             try:
 
                 tweets = gzip.open(tweet_file, "rt")
-            
+
             except (zlib.error, gzip.BadGzipFile):
                 tweets = []
-            
 
             tweet_ids = pybloomfilter.BloomFilter(100_000_000, 0.01)
 
@@ -59,24 +59,28 @@ def main(args):
                         if len(tweet) != 0:
 
                             if isinstance(tweet, str):
-                                try: 
+                                try:
                                     tweet = json.loads(tweet)
                                 except json.decoder.JSONDecodeError:
                                     print("Decode failure")
                                     continue
 
-                            if "text" in tweet and "lang" in tweet and tweet["lang"] == "en":
+                            if (
+                                "text" in tweet
+                                and "lang" in tweet
+                                and tweet["lang"] == "en"
+                            ):
                                 if tweet["id"] not in tweet_ids:
                                     tweet_text = tweet["text"]
                                     tweet_ids.add(tweet["id"])
                                 else:
                                     tweet_text = ""
-                
+
                             elif "body" in tweet:
                                 if tweet["id"] not in tweet_ids:
                                     tweet_text = tweet["body"]
                                     tweet_ids.add(tweet["id"])
-                                
+
                                 else:
                                     tweet_text = ""
 
@@ -87,9 +91,13 @@ def main(args):
 
                                 doc = nlp(tweet_text)
 
-                                filtered_text = " ".join([token.lemma_ for token in doc if not token.is_stop])
+                                filtered_text = " ".join(
+                                    [token.lemma_ for token in doc if not token.is_stop]
+                                )
 
-                                normalized_text = " ".join(tokenizer.tokenize(filtered_text)).replace("\n", "")
+                                normalized_text = " ".join(
+                                    tokenizer.tokenize(filtered_text)
+                                ).replace("\n", "")
 
                                 results.append([normalized_text])
 
@@ -98,18 +106,18 @@ def main(args):
                                 results = []
                     except Exception as e:
                         print(e)
-            
+
             except EOFError:
                 print(f"{tweet_file} was not downloaded properly")
-            
+
             writer_csv.writerows(results)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--tweet_files', nargs='+')
-    parser.add_argument('--output_folder')
-    parser.add_argument('--id')
+    parser.add_argument("--tweet_files", nargs="+")
+    parser.add_argument("--output_folder")
+    parser.add_argument("--id")
 
     args = parser.parse_args()
 
