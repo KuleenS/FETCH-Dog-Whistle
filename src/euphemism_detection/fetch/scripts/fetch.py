@@ -214,11 +214,11 @@ def main(args):
         for model_name in args.models:
 
             if args.filtering_method == "chatgpt-twostep":
-                model = ChatGPTLLM(model_name, args.temperature, max_tokens=3*args.llm_batch_size)
+                model = ChatGPTLLM(model_name,max_tokens=3*args.llm_batch_size)
             elif args.filtering_method == "offline-twostep":
-                model = OfflineLLM(model_name, args.temperature, max_tokens=3*args.llm_batch_size)
+                model = OfflineLLM(model_name, max_tokens=3*args.llm_batch_size)
             elif args.filtering_method == "gemini-twostep":
-                model = GeminiLLM(model_name, args.temperature, max_tokens=3*args.llm_batch_size)
+                model = GeminiLLM(model_name, max_tokens=3*args.llm_batch_size)
 
             batched_posts = list(batch(posts, args.llm_batch_size))
 

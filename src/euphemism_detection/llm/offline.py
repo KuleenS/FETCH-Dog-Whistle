@@ -6,6 +6,7 @@ import torch
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+
 class OfflineLLM:
     def __init__(self, model_name: str, max_tokens: int = 1):
         """HF offline model initializer
@@ -21,21 +22,19 @@ class OfflineLLM:
         self.max_tokens = max_tokens
 
         self.dogwhistle_schema = {
-            "dogwhistles": {
-                "type": "array",
-                "items": {"type": "string"}
-            }
+            "dogwhistles": {"type": "array", "items": {"type": "string"}}
         }
 
         self.prediction_schema = {
-            "predictions": {
-                "type": "array",
-                "items": {"type": "string"}
-            }
+            "predictions": {"type": "array", "items": {"type": "string"}}
         }
 
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, use_cache=True, device_map="auto")
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True, use_cache=True)
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name, use_cache=True, device_map="auto"
+        )
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_name, use_fast=True, use_cache=True
+        )
 
         if isinstance(self.model.config.eos_token_id, list):
             self.tokenizer.pad_token_id = self.model.config.eos_token_id[0]
@@ -55,11 +54,20 @@ class OfflineLLM:
 
         responses = []
 
-        schema = self.dogwhistle_schema if schema == "dogwhistle" else self.prediction_schema
+        schema = (
+            self.dogwhistle_schema if schema == "dogwhistle" else self.prediction_schema
+        )
 
         for example in examples:
 
-            jsonformer = Jsonformer(self.model, self.tokenizer, schema, example)
+            jsonformer = Jsonformer(
+                model=self.model,
+                tokenizer=self.tokenizer,
+                json_schema=schema,
+                prompt=example,
+                max_string_token_length=self.max_tokens,
+                max_array_length=self.max_tokens,
+            )
 
             generated_data = jsonformer()
 
