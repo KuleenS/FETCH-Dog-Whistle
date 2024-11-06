@@ -1,5 +1,3 @@
-from abc import ABC
-
 from typing import List
 
 import yake

@@ -1,11 +1,8 @@
-from abc import ABC
-
 from typing import List
 
 from rake_nltk import Rake
 
 from src.euphemism_detection.fetch.extraction.base_filter import BaseFilter
-
 
 class RAKEFilter(BaseFilter):
 

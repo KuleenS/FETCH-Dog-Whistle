@@ -17,11 +17,23 @@ class TextRankFilter(BaseFilter):
         self.nlp = spacy.load(model)
 
         self.nlp.add_pipe("textrank")
+    
+    def chunk_string(self, string, chunk_size):
+        return [string[i:i + chunk_size] for i in range(0, len(string), chunk_size)]
 
     def get_most_important_ngrams(self, corpus: List[str], top_k: int):
 
-        doc = self.nlp("\n".join(corpus))
+        corpus_total_string = "\n".join(corpus)
 
-        phrases = [x.text for x in list(doc._.phrases)][:top_k]
+        chunked_string = self.chunk_string(corpus_total_string, 95_000)
 
-        return phrases
+        phrases = []
+
+        for chunk in chunked_string:
+            doc = self.nlp(chunk)
+
+            phrases.extend([(x.text, x.rank) for x in list(doc._.phrases)])
+        
+        phrases = sorted(phrases, key=lambda x: x[1], reverse=True)[:top_k]
+
+        return [x[0] for x in phrases]
