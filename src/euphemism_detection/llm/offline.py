@@ -1,14 +1,13 @@
-import torch
-
 from typing import Iterable, List, Dict, Any
 
-from transformers import pipeline
+from jsonformer import Jsonformer
 
-from tqdm import tqdm
+import torch
 
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 class OfflineLLM:
-    def __init__(self, model_name: str, temperature: float = 1, max_tokens: int = 1):
+    def __init__(self, model_name: str, max_tokens: int = 1):
         """HF offline model initializer
 
         :param model_name: name of model
@@ -19,36 +18,33 @@ class OfflineLLM:
         :type max_tokens: int, optional
         """
         self.model_name = model_name
-        self.temperature = temperature
         self.max_tokens = max_tokens
 
-        self.pipeline_model = pipeline(
-            "text-generation", model=self.model_name, device_map="auto", batch_size=4
-        )
+        self.dogwhistle_schema = {
+            "dogwhistles": {
+                "type": "array",
+                "items": {"type": "string"}
+            }
+        }
 
-        if isinstance(self.pipeline_model.model.config.eos_token_id, list):
-            self.pipeline_model.tokenizer.pad_token_id = (
-                self.pipeline_model.model.config.eos_token_id[0]
-            )
+        self.prediction_schema = {
+            "predictions": {
+                "type": "array",
+                "items": {"type": "string"}
+            }
+        }
+
+        self.model = AutoModelForCausalLM.from_pretrained(model_name, use_cache=True, device_map="auto")
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True, use_cache=True)
+
+        if isinstance(self.model.config.eos_token_id, list):
+            self.tokenizer.pad_token_id = self.model.config.eos_token_id[0]
         else:
-            self.pipeline_model.tokenizer.pad_token_id = (
-                self.pipeline_model.model.config.eos_token_id
-            )
+            self.tokenizer.pad_token_id = self.model.config.eos_token_id
 
-        self.pipeline_model.tokenizer.padding_side = "left"
+        self.tokenizer.padding_side = "left"
 
-    def format_response(self, response: str, prompt: str) -> str:
-        """Clean up response from Offline HF model and return generated string
-
-        :param response: response from Offline HF model
-        :type response: Dict[str, Any]
-        :return: generated string
-        :rtype: str
-        """
-        text = response[len(prompt) :].replace("\n", " ").strip().lower()
-        return text
-
-    def generate_from_prompts(self, examples: Iterable[str]) -> List[str]:
+    def generate_from_prompts(self, examples: Iterable[str], schema: str) -> List[str]:
         """Send all examples to offline HF model and get its responses
 
         :param examples: list of prompts
@@ -56,17 +52,17 @@ class OfflineLLM:
         :return: list of cleaned responses
         :rtype: List[str]
         """
-        with torch.inference_mode():
-            responses = self.pipeline_model(examples, max_new_tokens=self.max_tokens)
 
-        responses = [x[0]["generated_text"] for x in responses]
+        responses = []
 
-        responses = [
-            self.format_response(x, prompt) for x, prompt in zip(responses, examples)
-        ]
+        schema = self.dogwhistle_schema if schema == "dogwhistle" else self.prediction_schema
 
-        del self.pipeline_model
+        for example in examples:
 
-        torch.cuda.empty_cache()
+            jsonformer = Jsonformer(self.model, self.tokenizer, schema, example)
+
+            generated_data = jsonformer()
+
+            responses.append(generated_data)
 
         return responses
