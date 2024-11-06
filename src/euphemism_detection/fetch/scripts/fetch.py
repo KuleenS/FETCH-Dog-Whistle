@@ -17,7 +17,7 @@ from tqdm import tqdm
 from src.euphemism_detection.bert.predict import PredictBERT
 from src.euphemism_detection.bert.train import TrainBERT
 
-from src.euphemism_detection.fetch.db.milvusdb import MilvusDB
+from src.euphemism_detection.fetch.db.chromadb import ChromaDB
 
 from src.euphemism_detection.fetch.extraction.tfidf import TFIDF
 from src.euphemism_detection.fetch.extraction.keybert import KeyBERTFilter
@@ -30,6 +30,11 @@ from src.euphemism_detection.llm.gemini import GeminiLLM
 from src.euphemism_detection.llm.offline import OfflineLLM
 
 from src.euphemism_detection.metrics import Metrics
+
+def batch(iterable, n=1):
+    l = len(iterable)
+    for ndx in range(0, l, n):
+        yield iterable[ndx:min(ndx + n, l)]
 
 
 def measure_max_effectiveness(
@@ -136,11 +141,7 @@ def main(args):
             x.lower().strip() for x in f.readlines()
         ]
 
-    db = MilvusDB(args.collection_name, 384)
-
-    db.load_data(args.embedding_folder)
-
-    db.create_index()
+    db = ChromaDB(args.db_path, args.collection_name, args.embedding_folder)
 
     if not os.path.exists(
         os.path.join(args.output_folder, f"lookup_saved_{args.collection_name}.pickle")
@@ -164,20 +165,12 @@ def main(args):
 
             total_seed_posts.extend(seed_posts)
 
-        posts = []
+        returned = db.get_top_k_documents(total_tweet_ids, centroid, 1)
 
-        dogwhistles = []
+        posts = [x["post"] for x in returned]
 
-        for j in tqdm(range(len(centroid))):
-            if not np.isnan(centroid[j]).all():
-
-                returned = list(
-                    db.get_top_k_documents(total_tweet_ids, centroid[j], 1)[0]
-                )
-
-                dogwhistles.extend([x.dogwhistle for x in returned])
-                posts.extend([x.post for x in returned])
-
+        dogwhistles = [x["dogwhistle"] for x in returned]
+        
         with open(
             os.path.join(
                 args.output_folder, f"lookup_saved_{args.collection_name}.pickle"
@@ -212,36 +205,52 @@ def main(args):
     ):
         prompt = (
             "You are a helpful assistant participating in a content moderation task of dog whistle detection.\n"
-            "A dog whistle is the use of coded or suggestive language in political messaging to garner support from a particular group without provoking opposition. The concept is named after ultrasonic dog whistles, which are audible to dogs but not humans. Dog whistles use language that appears normal to the majority but communicates specific things to intended audiences. They are generally used to convey messages on issues likely to provoke controversy without attracting negative attention. Is a dog whistle present in the following sentence?\n"
+            "A dog whistle is the use of coded or suggestive language in political messaging to garner support from a particular group without provoking opposition. The concept is named after ultrasonic dog whistles, which are audible to dogs but not humans. Dog whistles use language that appears normal to the majority but communicates specific things to intended audiences. They are generally used to convey messages on issues likely to provoke controversy without attracting negative attention. Are dog whistles present in the following sentences?\n"
             "{sentence}\n"
-            "Please reply YES OR NO.\n"
-            "Answer:"
+            "Please respond only Yes or No in for each post.\n"
+            'Please respond with a JSON for a function call with its proper arguments that best answers the given prompt. Respond in the format {{"predictions": list of Yes or No}}.\n'
         )
 
         for model_name in args.models:
 
             if args.filtering_method == "chatgpt-twostep":
-                model = ChatGPTLLM(model_name, args.temperature)
+                model = ChatGPTLLM(model_name, args.temperature, max_tokens=3*args.llm_batch_size)
             elif args.filtering_method == "offline-twostep":
-                model = OfflineLLM(model_name, args.temperature)
+                model = OfflineLLM(model_name, args.temperature, max_tokens=3*args.llm_batch_size)
             elif args.filtering_method == "gemini-twostep":
-                model = GeminiLLM(model_name, args.temperature)
+                model = GeminiLLM(model_name, args.temperature, max_tokens=3*args.llm_batch_size)
 
-            print("Filtered with:", model_name)
+            batched_posts = list(batch(posts, args.llm_batch_size))
 
-            predictions = model.generate_from_prompts(
-                [prompt.format(sentence=x) for x in posts]
-            )
+            batched_dogwhistles = list(batch(dogwhistles, args.llm_batch_size))
+
+            prompts = []
+
+            for batched_post in batched_posts:
+                prompts.append(prompt.format(sentence="\n".join(batched_post)))
+
+            predictions = model.generate_from_prompts(prompts, "predictions")
+
+            predictions = [x["predictions"] for x in predictions]
+
+            with open(os.path.join(args.output_folder, f"{model_name.replace('/', '-')}_predictions-twostep.txt"), "w") as f:
+                f.write("\n".join([",".join(x) for x in predictions]))
+
+            cut_down_dogwhistles = sum([batched_dogwhistle[:len(prediction)] for batched_dogwhistle,prediction in zip(batched_dogwhistles, predictions)], [])
+
+            cut_down_posts = sum([batched_post[:len(prediction)] for batched_post,prediction in zip(batched_posts, predictions)], [])
+
+            predictions = sum(predictions, [])
 
             filtered_posts = [
                 post
-                for prediction, post in zip(predictions, posts)
+                for prediction, post in zip(predictions, cut_down_posts)
                 if any(x in prediction for x in ["yes", "y"])
             ]
 
             dogwhistles_at_step = [
                 dogwhistle
-                for dogwhistle, prediction in zip(dogwhistles, predictions)
+                for dogwhistle, prediction in zip(cut_down_dogwhistles, predictions)
                 if any(x in prediction for x in ["yes", "y"])
             ]
 
@@ -262,7 +271,7 @@ def main(args):
     ):
         prompt = (
             "You are a helpful assistant participating in a content moderation task of dog whistle detection.\n"
-            "A dog whistle is the use of coded or suggestive language in political messaging to garner support from a particular group without provoking opposition. The concept is named after ultrasonic dog whistles, which are audible to dogs but not humans. Dog whistles use language that appears normal to the majority but communicates specific things to intended audiences. They are generally used to convey messages on issues likely to provoke controversy without attracting negative attention. Does the following sentence contain a dog whistle? If it does, please identify the dog whistle.\n"
+            "A dog whistle is the use of coded or suggestive language in political messaging to garner support from a particular group without provoking opposition. The concept is named after ultrasonic dog whistles, which are audible to dogs but not humans. Dog whistles use language that appears normal to the majority but communicates specific things to intended audiences. They are generally used to convey messages on issues likely to provoke controversy without attracting negative attention. Do the following posts contain dog whistles? If they do, please identify the dog whistles in each one.\n"
             "{sentence}\n"
             'Please respond with a JSON for a function call with its proper arguments that best answers the given prompt. Respond in the format {{"dogwhistles": list of strings}}.\n'
         )
@@ -270,32 +279,31 @@ def main(args):
         for model_name in args.models:
 
             if args.filtering_method == "chatgpt-direct":
-                model = ChatGPTLLM(model_name, args.temperature, max_tokens = 300)
+                model = ChatGPTLLM(model_name, args.temperature, max_tokens = 600)
             elif args.filtering_method == "offline-direct":
-                model = OfflineLLM(model_name, args.temperature, max_tokens = 300)
+                model = OfflineLLM(model_name, args.temperature, max_tokens = 600)
             elif args.filtering_method == "gemini-direct":
-                model = GeminiLLM(model_name, args.temperature, max_tokens = 300)
+                model = GeminiLLM(model_name, args.temperature, max_tokens = 600)
 
             print("Filtered with:", model_name)
 
-            predictions = model.generate_from_prompts(
-                [prompt.format(sentence=x) for x in posts]
-            )
+            batched_posts = batch(posts, args.llm_batch_size)
 
-            json_answers = [x[x.find("{"):x.rfind("}")+1].replace("\n", "") for x in predictions]
+            prompts = []
 
-            dogwhistles_found = []
+            for batched_post in batched_posts:
+                prompts.append(prompt.format(sentence="\n".join(batched_post)))
+            
+            predictions = model.generate_from_prompts(prompts, "dogwhistle")
 
-            for json_answer in json_answers:
-                try:
-                    dogwhistles_found.extend(json.loads(json_answer)["dogwhistles"])
-                except:
-                    try:
-                        dogwhistles_found.extend(ast.literal_eval(json_answer[json_answer.find("["):json_answer.rfind("]")+1]))
-                    except:
-                        continue
+            predictions = [x["dogwhistles"] for x in predictions]
+
+            with open(os.path.join(args.output_folder, f"{model_name.replace('/', '-')}_predictions-direct.txt"), "w") as f:
+                f.write("\n".join([",".join(x) for x in predictions]))
+
+            dogwhistles_found = sum(predictions, [])
                 
-            ngrams = max([len(nltk.tokenize.word_tokenize(x)) for x in dogwhistles_found])
+            ngrams = max([len(nltk.tokenize.word_tokenize(x)) for x in dogwhistles_found if isinstance(x, str)])
             
             metrics = Metrics(args.dogwhistle_file)
 
@@ -311,7 +319,7 @@ def main(args):
                 dogwhistles_found, extrapolating_dogwhistles_surface_forms, ngrams
             )
 
-            print("Filtered with a trained version of :", model_name)
+            print("Filtered with a trained version of:", model_name)
 
             print(precision, recall, possible_recall)
 
@@ -344,8 +352,6 @@ def main(args):
 
             predictions = model.prediction(posts)
 
-            print(predictions[:10])
-
             filtered_posts = [
                 post for prediction, post in zip(predictions, posts) if prediction == 1
             ]
@@ -371,7 +377,7 @@ def main(args):
 
     elif args.filtering_method == "bert-predict":
         for model_name in args.models:
-            model = PredictBERT(model_name)
+            model = PredictBERT(model_folder=model_name, model_name=model_name)
 
             predictions = model.prediction(posts)
 
@@ -384,9 +390,7 @@ def main(args):
             print("Filtered with:", model_name)
 
             dogwhistles_at_step = [
-                dogwhistle
-                for dogwhistle, prediction in zip(dogwhistles, predictions)
-                if any(x in prediction for x in ["yes", "y"])
+                dogwhistle for dogwhistle, prediction in zip(dogwhistles, predictions) if prediction == 1
             ]
 
             if len(filtered_posts) != 0:
@@ -422,6 +426,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--output_folder")
 
+    parser.add_argument("--db_path")
+
     parser.add_argument(
         "--filtering_method",
         type=str,
@@ -438,6 +444,8 @@ if __name__ == "__main__":
         ],
         default="none",
     )
+
+    parser.add_argument("--llm_batch_size", type=int, required=False, default=1)
 
     parser.add_argument("--models", type=str, nargs="+", required=False)
 
