@@ -1,20 +1,19 @@
 from typing import List, Tuple
 
-from sklearn.cluster import KMeans
+from sklearn.cluster import HDBSCAN
 
 import math
 
 
 class DiversityReranker:
 
-    def __init__(self, clusters: int):
-
-        self.clusters = clusters
+    def __init__(self):
+        pass
 
     def rerank(self, documents: List[str], embeddings: List[List[float]], top_k: int):
         num_clusters = min(len(embeddings), self.clusters)
 
-        kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(embeddings)
+        kmeans = HDBSCAN().fit(embeddings)
 
         proportions = dict(zip(range(num_clusters), [0] * num_clusters))
 

@@ -6,30 +6,35 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from tqdm import tqdm
 
+
 class PerplexityMetric:
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, model_name: str, time_series: bool = False) -> None:
         self.model_name = model_name
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        
+
         self.tokenizer.pad_token = self.tokenizer.eos_token
-        
+
         self.tokenizer.model_max_length = 512
 
-        self.model = AutoModelForCausalLM.from_pretrained(self.model_name, device_map ="cuda")
+        self.model = AutoModelForCausalLM.from_pretrained(
+            self.model_name, device_map="cuda"
+        )
 
         self.loss_func = torch.nn.CrossEntropyLoss(reduction="none")
-    
+
+        self.time_series = time_series
+
     def batch(self, iterable, n=1):
         l = len(iterable)
         for ndx in range(0, l, n):
-            yield iterable[ndx:min(ndx + n, l)]
+            yield iterable[ndx : min(ndx + n, l)]
 
     def get_scores(self, sentences: List[str]):
         encodings = self.tokenizer(
             sentences,
             add_special_tokens=False,
-            padding='max_length',
+            padding="max_length",
             truncation=True if self.tokenizer.model_max_length else False,
             max_length=self.tokenizer.model_max_length,
             return_tensors="pt",
@@ -57,10 +62,30 @@ class PerplexityMetric:
             shift_labels = labels[..., 1:].contiguous()
             shift_attention_mask_batch = attn_mask[..., 1:].contiguous()
 
-            perplexity_batch = torch.exp(
-                (self.loss_func(shift_logits.transpose(1, 2), shift_labels) * shift_attention_mask_batch).sum(1)
-                / shift_attention_mask_batch.sum(1)
-            ).detach().cpu()
+            if self.time_series:
+                perplexity_batch = (
+                    torch.exp(
+                        (
+                            self.loss_func(shift_logits.transpose(1, 2), shift_labels)
+                            * shift_attention_mask_batch
+                        )
+                    )
+                    .detach()
+                    .cpu()
+                )
+
+            else:
+                perplexity_batch = (
+                    torch.exp(
+                        (
+                            self.loss_func(shift_logits.transpose(1, 2), shift_labels)
+                            * shift_attention_mask_batch
+                        ).sum(1)
+                        / shift_attention_mask_batch.sum(1)
+                    )
+                    .detach()
+                    .cpu()
+                )
 
             ppls.extend(perplexity_batch.tolist())
 
