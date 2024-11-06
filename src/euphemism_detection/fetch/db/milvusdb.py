@@ -38,8 +38,10 @@ def group_list(documents, embeddings, dogwhistles, group_size):
 class MilvusDB:
 
     def __init__(self, collection_name: str, dim: int) -> None:
-
-        default_server.start()
+        try:
+            default_server.start()
+        except TimeoutError:
+            print("Server already up locally on same ip and port")
 
         connections.connect(host="127.0.0.1", port=default_server.listen_port)
 
