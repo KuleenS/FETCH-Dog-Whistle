@@ -19,7 +19,7 @@ except ImportError:
 
 from tqdm import tqdm
 
-from src.euphemism_detection.fetch.embedding.sentencetransformer import (
+from src.earshot.embedding.sentencetransformer import (
     SentenceTransformerEmbedder,
 )
 

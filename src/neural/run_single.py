@@ -4,11 +4,11 @@ import os
 
 import pandas as pd
 
-from src.euphemism_detection.neural.models.single_neural_euphemism import (
+from src.neural.models.single_neural_euphemism import (
     SingleNeuralEuphemismDetector,
 )
 
-from src.euphemism_detection.metrics import Metrics
+from src.metrics import Metrics
 
 
 def main(args):

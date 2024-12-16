@@ -28,7 +28,7 @@ from tqdm import tqdm
 
 from nltk.corpus import stopwords
 
-from src.euphemism_detection.neural.fitbert import FitBert
+from src.neural.fitbert import FitBert
 
 nltk.download("stopwords")
 
@@ -315,8 +315,6 @@ class MultiNeuralEuphemismDetector:
                                     tweet_text = ""
 
                         if isinstance(tweet_text, str) and tweet_text is not None:
-                            print(tweet_text)
-                            print(type(tweet_text))
                             temp = nltk.word_tokenize(tweet_text)
                             for target in input_keywords:
                                 if target not in temp:
@@ -334,33 +332,34 @@ class MultiNeuralEuphemismDetector:
                                 else:
                                     s = int(random.random() * N)
                                     if s < K:
-                                        masked_sentence[s] = [
-                                            " ".join(temp[:temp_index])
-                                            + MASK
-                                            + " ".join(temp[temp_index + 1 :])
-                                        ]
-
+                                        masked_sentence[s] = " ".join(temp[:temp_index])+ MASK+ " ".join(temp[temp_index + 1 :])
+                                        
                 except EOFError:
                     print(f"{tweet_file} was not downloaded properly")
 
             print("[util.py] Generating top candidates...")
 
         elif self.data_is_tweets == "txt":
-            masked_sentence = []
-
-            for tweet_text in self.data:
+            for tweet_text in tqdm(self.data):
                 temp = nltk.word_tokenize(tweet_text)
                 for target in input_keywords:
                     if target not in temp:
                         continue
-
                     temp_index = temp.index(target)
 
-                    masked_sentence += [
-                        " ".join(temp[:temp_index])
-                        + MASK
-                        + " ".join(temp[temp_index + 1 :])
-                    ]
+                    N += 1
+
+                    if len(masked_sentence) < K:
+                        masked_sentence.append(
+                            " ".join(temp[:temp_index])
+                            + MASK
+                            + " ".join(temp[temp_index + 1 :])
+                        )
+                    else:
+                        s = int(random.random() * N)
+                        if s < K:
+                            masked_sentence[s] = " ".join(temp[:temp_index])+ MASK+ " ".join(temp[temp_index + 1 :])
+                            
         else:
             masked_sentence = self.data
 

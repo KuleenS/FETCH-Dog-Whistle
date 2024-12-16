@@ -4,7 +4,7 @@ import numpy as np
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from src.euphemism_detection.fetch.extraction.base_filter import BaseFilter
+from src.earshot.extraction.base_filter import BaseFilter
 
 
 class TFIDF(BaseFilter):

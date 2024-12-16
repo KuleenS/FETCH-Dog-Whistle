@@ -4,7 +4,7 @@ from typing import List
 
 from keybert import KeyBERT
 
-from src.euphemism_detection.fetch.extraction.base_filter import BaseFilter
+from src.earshot.extraction.base_filter import BaseFilter
 
 
 class KeyBERTFilter(BaseFilter):

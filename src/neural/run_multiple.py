@@ -8,11 +8,11 @@ import pandas as pd
 
 from tqdm import tqdm
 
-from src.euphemism_detection.neural.models.multiple_neural_euphemism import (
+from src.neural.models.multiple_neural_euphemism import (
     MultiNeuralEuphemismDetector,
 )
 
-from src.euphemism_detection.metrics import Metrics
+from src.metrics import Metrics
 
 
 def main(args):
