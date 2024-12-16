@@ -1,3 +1,0 @@
-[submodule "src/euphemism_detection/mental-health"]
-	path = src/euphemism_detection/mental-health
-	url = https://github.com/kharrigian/mental-health.git
