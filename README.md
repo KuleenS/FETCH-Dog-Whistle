@@ -1,4 +1,4 @@
-# DogWhistleKG
+# FETCH-Dog-Whistle
 
 ## Set up
 
