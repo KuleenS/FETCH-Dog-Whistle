@@ -425,7 +425,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, required=False)
     parser.add_argument("--model_output_folder", type=str)
 
-    parser.add_argument("--extraction_n_grams", type=int, nargs="+")
+    parser.add_argument("--extraction_n_grams", type=int, nargs="+", required=False)
 
     args = parser.parse_args()
     main(args)
