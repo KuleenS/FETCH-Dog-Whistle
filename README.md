@@ -116,8 +116,6 @@ To get evaluation from Word2Vec/Phrase2Vec run `src/word2vec/word2vec_eval.py`
 
 ## Running Neural Methods (MLM and EPD)
 
-
-
 ### MLM
 
 To run the EPD experiments use `src/neural/run_single.py`
@@ -150,6 +148,56 @@ The parameters for the file are:
 
 ## EarShot
 
-### Setting up EarShot
+### Setting up EarShot Database
+
+Run either `src/earshot/scripts/embed.py` or `src/earshot/scripts/embed_other.py`
+
+#### embed.py
+
+Four parameters
+- output_path: output path for output npz files
+- input_files: list of .gz files from twitter/gab
+- dogwhistle_file_path: allen ai glossary.tsv or reddit parquet file containing all the ground truth dog whistles
+- id: id of process to distinguish between different processes outputting to same folder
+
+#### embed_other.py
+
+Four parameters
+- output_path: output path for output npz files
+- input_file: CSV or parquet file with either tweet or content as its single column name
+- dogwhistle_file_path: allen ai glossary.tsv or reddit parquet file containing all the ground truth dog whistles
+- id: id of process to distinguish between different processes outputting to same folder
 
 ### Running EarShot
+
+To run earshot run `src/earshot/scripts/earshot.py`
+
+- embedding_folder: folder of npz files from embed step
+- dogwhistle_file: allen ai glossary.tsv or reddit parquet file containing all the ground truth dog whistles
+- dogwhistle_path: path to extrapolating.dogwhistles and given.dogwhistles files
+- collection_name: name of collection of database to save/load
+- output_folder: path to save/load database lookup
+- db_path: path to save/load database
+- filtering_method: what earshot method to try
+    - choices
+        - bert-train: train a bert with seed posts as positive examples and random sample as negative samples 
+        - bert-predict: use a model to predict yes or no to dog whistle in post
+        - twostep: using LLM to predict yes or no to dog whistle in post
+            - gemini-twostep: use gemini for this task
+            - chatgpt-twostep: use chatgpt/openai for this task
+            - offline-twostep: use offline huggingface model for this task
+        - direct: directly asking LLM for dog whistle
+            - offline-direct: use offline huggingface model for this task
+            - chatgpt-direct: use chatgpt/openai for this task
+            - gemini-direct: use gemini for this task
+        - none: no filtering done beforehand
+- llm_batch_size: batch size for LLMs
+- models: LLMs/BERT to try 
+- temperature: temperature of sampling from LLM
+- bert-train parameters
+    - lr: learning rate
+    - weight_decay: L2 penalty
+    - batch_size: batch size for BERT
+    - epochs: number of epochs to train model
+    - model_output_folder: where to save BERT models
+- extraction_n_grams: list of max number of ngrams to extract using keyword extraction models
