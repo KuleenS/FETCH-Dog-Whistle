@@ -2,7 +2,7 @@ import argparse
 
 import pandas as pd
 
-from src.euphemism_detection.metrics import Metrics
+from src.metrics import Metrics
 
 
 def process_expansions_json(expansion_json_path: str):
